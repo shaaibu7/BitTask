@@ -1,61 +1,80 @@
-# BitTask
+# BitTask - Decentralized Microgigs Marketplace
 
 **BitTask** is a decentralized tasks marketplace built on **Stacks (Bitcoin L2)**. It enables users to post tasks with rewards paid in STX or sBTC, and allows workers to complete these tasks and get paid trustlessly via smart contracts.
 
-## 📖 Project Overview
+![Stacks](https://img.shields.io/badge/Stacks-Blockchain-blueviolet?style=flat-square) ![Clarity](https://img.shields.io/badge/Language-Clarity-orange?style=flat-square) ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
-BitTask leverages the security of Bitcoin through the Stacks layer to provide a secure, transparent, and decentralized platform for micro-work. By removing centralized intermediaries, BitTask ensures lower fees, censorship resistance, and trustless escrow services.
+## 🏗 System Architecture
 
-## 🚩 Problem Statement
+The project consists of a Clarity smart contract (`bittask`) that manages the state of all tasks and holds funds in escrow. Users interact with the contract directly or through a Next.js frontend application.
 
-Traditional freelancing and micro-task platforms suffer from:
-- **High Fees**: Intermediaries take a significant cut (up to 20%).
-- **Centralized Control**: Platforms can freeze accounts or withhold funds arbitrarily.
-- **Lack of Transparency**: Dispute resolution and payment flows are often opaque.
-- **Slow Settlements**: Traditional banking rails can take days to settle payments.
+```mermaid
+graph TD
+    User[Task Creator]
+    Worker[Freelancer]
+    
+    subgraph Stacks_Blockchain [Stacks Blockchain]
+        Contract[bittask.clar]
+        State[Contract State]
+    end
+    
+    subgraph Storage [On-Chain Storage]
+        Tasks[Tasks Map]
+        Nonce[Task Nonce]
+    end
 
-**BitTask** solves this by using Clarity smart contracts to handle escrow and payments automatically, ensuring fairness and instant settlement upon approval.
+    User -- "Create Task (Lock STX)" --> Contract
+    Worker -- "Accept & Submit Work" --> Contract
+    User -- "Approve Work (Release STX)" --> Contract
+    
+    Contract -- Read/Write --> Tasks
+    Contract -- Read/Write --> Nonce
+    Contract -- Updates --> State
+```
 
-## 🏗 Architecture
+## 🔄 Workflow
 
-BitTask follows a decentralized architecture:
+The lifecycle of a task follows a linear flow from creation to completion or dispute.
 
-- **Blockchain Layer**: Stacks (Bitcoin L2) for smart contracts and transaction settlement.
-- **Smart Contracts**: Written in Clarity, handling task creation, escrow, assignment, submission, and payment release.
-- **Frontend**: Next.js application interacting with the Stacks blockchain via Stacks.js.
-- **Authentication**: Wallet-based authentication (Leather, Xverse).
-- **Storage**: Critical state is on-chain. Large file submissions (proof of work) can be stored on IPFS (optional).
+```mermaid
+stateDiagram-v2
+    [*] --> Open: create-task
+    
+    state Open {
+        [*] --> InProgress: accept-task (Future)
+    }
+    
+    InProgress --> Submitted: submit-work (Future)
+    Submitted --> Completed: approve-work (Future)
+    
+    state Completed {
+        [*] --> FundsReleased
+        note right of FundsReleased
+          Creator approves
+          Worker gets paid
+        end note
+    }
+    
+    Completed --> [*]
+```
 
-## 🔐 Smart Contract Design
+## ✨ Features
 
-The core logic resides in the `bittask` contract.
+- **Create Tasks**: Users can post tasks with a title, description, deadline, and STX reward.
+- **Trustless Escrow**: Funds are locked in the smart contract upon task creation, ensuring the creator cannot withhold payment arbitrarily.
+- **Automated Bookkeeping**: The contract tracks the status, assignees, and history of every task.
+- **Transparency**: All task data and payment flows are publicly verifiable on the Stacks blockchain.
+- **Security**: Leveraging Bitcoin's security through the Stacks Proof of Transfer (PoX) mechanism.
 
-### Core Entities
-- **Task**: Represents a gig. Contains title, description, reward, deadline, creator, worker, and status.
+## 🛠 Prerequisites
 
-### Task Lifecycle
-1.  **Open**: Task created, funds locked in escrow.
-2.  **In Progress**: Worker accepts the task.
-3.  **Submitted**: Worker submits proof of work.
-4.  **Completed**: Creator approves work, funds released to worker.
-5.  **Disputed**: (Optional) Dispute raised if work is rejected or deadline missed.
+Ensure you have the following installed:
 
-## 🛠 Tech Stack
+- [Node.js](https://nodejs.org/) (v18+)
+- [Clarinet](https://github.com/hirosystems/clarinet) (for local smart contract dev)
+- [Git](https://git-scm.com/)
 
--   **Smart Contracts**: [Clarity](https://clarity-lang.org/)
--   **Frontend Framework**: [Next.js](https://nextjs.org/)
--   **Blockchain Interaction**: [Stacks.js](https://github.com/hirosystems/stacks.js)
--   **Wallets**: [Leather](https://leather.io/), [Xverse](https://www.xverse.app/)
--   **Development Environment**: [Clarinet](https://github.com/hirosystems/clarinet)
-
-## 🚀 Local Setup
-
-### Prerequisites
--   [Node.js](https://nodejs.org/) (v18+)
--   [Clarinet](https://github.com/hirosystems/clarinet) (for smart contract dev)
--   [Docker](https://www.docker.com/) (for running local Stacks node)
-
-### Installation
+## 🚀 Installation
 
 1.  **Clone the repository**
     ```bash
@@ -69,43 +88,46 @@ The core logic resides in the `bittask` contract.
     npm install
     ```
 
-3.  **Run Local Stacks Chain (Devnet)**
-    ```bash
-    # In the root directory
-    clarinet integrate
-    ```
-    This will start a local Stacks blockchain and deploy the contracts.
+## 🧪 Testing
 
-4.  **Run Frontend**
-    ```bash
-    cd frontend
-    npm run dev
-    ```
-    Open [http://localhost:3000](http://localhost:3000) in your browser.
+This project uses Vitest with `vitest-environment-clarinet` for comprehensive unit testing.
 
-## 📦 Deployment
+To run the tests:
 
-### Smart Contracts
-To deploy contracts to the Stacks Testnet or Mainnet:
+```bash
+cd contracts
+npm install
+npm test
+```
 
-1.  Configure your `Clarinet.toml` and `settings/Testnet.toml` (or `Mainnet.toml`).
-2.  Run the deployment command:
+## 📜 Deployment
+
+The project includes scripts to facilitate deployment to the Stacks network (Testnet/Mainnet).
+
+1.  **Configure Environment**
+    Ensure your `Clarinet.toml` and settings files are set up.
+
+2.  **Run Deploy Script**
     ```bash
     clarinet deploy --config Clarinet.toml --settings settings/Testnet.toml
     ```
 
-### Frontend
-Deploy the Next.js application to Vercel, Netlify, or any standard web hosting service. Ensure you set the `NEXT_PUBLIC_NETWORK` environment variable to `testnet` or `mainnet`.
+## 💻 Usage
 
-## 🛡 Security Considerations
+### Smart Contract Functions
 
--   **Trustless Escrow**: Funds are locked in the contract and can only be released by the logic defined in the code.
--   **No Admin Keys**: The contract is designed to be immutable or have limited admin governance to prevent rug pulls.
--   **Post-Conditions**: The frontend uses Stacks post-conditions to protect users from unauthorized asset transfers.
+| Function | Type | Description |
+| :--- | :--- | :--- |
+| `create-task` | Public | Creates a new task with title, description, reward, and deadline. |
+| `get-task` | Read-Only | Retrieves details of a specific task. |
+| `get-nonce` | Read-Only | Retrieves the current total number of tasks. |
+| `accept-task` | Public | *Coming Soon* - Assigns a worker to a task. |
+| `submit-work` | Public | *Coming Soon* - Submits proof of work. |
+| `approve-work` | Public | *Coming Soon* - Appproves work and releases funds. |
 
-## 🤝 Contribution Guidelines
+## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 1.  Fork the repository.
 2.  Create a new branch (`git checkout -b feature/amazing-feature`).
@@ -113,8 +135,6 @@ We welcome contributions! Please follow these steps:
 4.  Push to the branch (`git push origin feature/amazing-feature`).
 5.  Open a Pull Request.
 
-Please ensure your code follows the project's style guidelines and includes relevant tests.
+## 📄 License
 
----
-
-**BitTask** - Decentralizing task marketplace on Bitcoin.
+This project is licensed under the MIT License.
