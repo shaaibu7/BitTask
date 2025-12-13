@@ -1,4 +1,3 @@
-
 ;; BitTask: Decentralized Microgigs Marketplace
 ;; Contract for managing tasks, escrow, and payments.
 
@@ -7,6 +6,8 @@
 (define-constant ERR-INVALID-ID (err u101))
 (define-constant ERR-UNAUTHORIZED (err u102))
 (define-constant ERR-PAST-DEADLINE (err u103))
+(define-constant ERR-EMPTY-TITLE (err u104))
+(define-constant ERR-EMPTY-DESCRIPTION (err u105))
 
 ;; Data Vars
 (define-data-var task-nonce uint u0)
@@ -22,7 +23,7 @@
         amount: uint,
         deadline: uint,
         status: (string-ascii 20), ;; "open", "in-progress", "submitted", "completed", "disputed"
-        created-at: uint
+        created-at: uint,
     }
 )
 
@@ -33,11 +34,19 @@
 ;; @param description (string-ascii 256) - Short description
 ;; @param amount uint - Reward amount in micro-STX
 ;; @param deadline uint - Block height by which task must be completed
-(define-public (create-task (title (string-ascii 50)) (description (string-ascii 256)) (amount uint) (deadline uint))
-    (let
-        (
-            (task-id (+ (var-get task-nonce) u1))
-        )
+(define-public (create-task
+        (title (string-ascii 50))
+        (description (string-ascii 256))
+        (amount uint)
+        (deadline uint)
+    )
+    (let ((task-id (+ (var-get task-nonce) u1)))
+        ;; Check title is not empty
+        (asserts! (> (len title) u0) ERR-EMPTY-TITLE)
+
+        ;; Check description is not empty
+        (asserts! (> (len description) u0) ERR-EMPTY-DESCRIPTION)
+
         ;; Check amount is positive
         (asserts! (> amount u0) ERR-ZERO-AMOUNT)
 
@@ -56,14 +65,20 @@
             amount: amount,
             deadline: deadline,
             status: "open",
-            created-at: block-height
+            created-at: block-height,
         })
 
         ;; Increment nonce
         (var-set task-nonce task-id)
 
         ;; Emit event
-        (print { event: "created", id: task-id, creator: tx-sender, amount: amount, deadline: deadline })
+        (print {
+            event: "created",
+            id: task-id,
+            creator: tx-sender,
+            amount: amount,
+            deadline: deadline,
+        })
 
         (ok task-id)
     )
