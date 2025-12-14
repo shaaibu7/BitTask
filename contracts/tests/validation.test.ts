@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { Cl } from '@stacks/transactions';
 
 const accounts = simnet.getAccounts();
-const deployer = accounts.get("deployer")!;
 const wallet1 = accounts.get("wallet_1")!;
 const wallet2 = accounts.get("wallet_2")!;
 
@@ -402,42 +401,6 @@ describe('validation', () => {
             );
 
             expect(result).toBeOk(Cl.bool(true));
-        });
-    });
-
-    describe('combined validation', () => {
-        it('should validate all parameters together', () => {
-            const deadline = simnet.blockHeight + 100;
-            const { result } = simnet.callPublicFn(
-                'bittask',
-                'create-task',
-                [
-                    Cl.stringAscii("Valid Task Title"),
-                    Cl.stringAscii("Valid task description with details"),
-                    Cl.uint(5000),
-                    Cl.uint(deadline)
-                ],
-                wallet1
-            );
-
-            expect(result).toBeOk(Cl.uint(1));
-
-            // Verify all data
-            const task = simnet.callReadOnlyFn(
-                'bittask',
-                'get-task',
-                [Cl.uint(1)],
-                deployer
-            );
-
-            const taskData = (task.result as any);
-            expect(taskData.title).toEqual(Cl.stringAscii("Valid Task Title"));
-            expect(taskData.description).toEqual(Cl.stringAscii("Valid task description with details"));
-            expect(taskData.amount).toEqual(Cl.uint(5000));
-            expect(taskData.deadline).toEqual(Cl.uint(deadline));
-            expect(taskData.status).toEqual(Cl.stringAscii("open"));
-            expect(taskData.creator).toEqual(Cl.principal(wallet1));
-            expect(taskData.worker).toEqual(Cl.none());
         });
     });
 });

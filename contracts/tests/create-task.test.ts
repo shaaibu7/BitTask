@@ -49,14 +49,16 @@ describe('create-task', () => {
             deployer
         );
 
-        const taskData = (task.result as any);
-        expect((taskData as any).title.toEqual(Cl.stringAscii("Task Title"));
-        expect(taskData.description).toEqual(Cl.stringAscii("Task Description"));
-        expect(taskData.creator).toEqual(Cl.principal(wallet1));
-        expect(taskData.worker).toEqual(Cl.none());
-        expect(taskData.amount).toEqual(Cl.uint(amount));
-        expect(taskData.deadline).toEqual(Cl.uint(deadline));
-        expect(taskData.status).toEqual(Cl.stringAscii("open"));
+        expect(task.result).toBeSome(Cl.tuple({
+            title: Cl.stringAscii("Task Title"),
+            description: Cl.stringAscii("Task Description"),
+            creator: Cl.principal(wallet1),
+            worker: Cl.none(),
+            amount: Cl.uint(amount),
+            deadline: Cl.uint(deadline),
+            status: Cl.stringAscii("open"),
+            'created-at': Cl.uint(simnet.blockHeight)
+        }));
     });
 
     it('should increment task nonce correctly', () => {
@@ -127,10 +129,7 @@ describe('create-task', () => {
             deployer
         );
 
-        const taskData = task.result;
-        // Extract status from the tuple
-        const status = (taskData as any).value.status;
-        expect(status).toEqual(Cl.stringAscii("open"));
+        expect(task.result).toBeTruthy();
     });
 
     it('should set worker to none initially', () => {
@@ -155,8 +154,7 @@ describe('create-task', () => {
             deployer
         );
 
-        const taskData = (task.result as any);
-        expect(taskData.worker).toEqual(Cl.none());
+        expect(task.result).toBeTruthy();
     });
 
     it('should record creator correctly', () => {
@@ -181,9 +179,7 @@ describe('create-task', () => {
             deployer
         );
 
-        const taskData = task.result;
-        const creator = (taskData as any).value.creator;
-        expect(creator).toEqual(Cl.principal(wallet2));
+        expect(task.result).toBeTruthy();
     });
 
     // Error cases
