@@ -87,9 +87,80 @@ describe('bittask contract', () => {
             amount: Cl.uint(amount),
             deadline: Cl.uint(deadline),
             status: Cl.stringAscii("open"),
+            submission: Cl.none(),
             'created-at': Cl.uint(simnet.blockHeight)
         }));
     });
+
+    it('ensure that a user can accept and submit a task', () => {
+        const amount = 1000;
+        const deadline = simnet.blockHeight + 100;
+        const worker = accounts.get("wallet_2")!;
+
+        // Create task
+        simnet.callPublicFn(
+            'bittask',
+            'create-task',
+            [
+                Cl.stringAscii("Task 3"),
+                Cl.stringAscii("Desc 3"),
+                Cl.uint(amount),
+                Cl.uint(deadline)
+            ],
+            wallet1
+        );
+        const creationHeight = simnet.blockHeight;
+
+        const taskId = Cl.uint(1); // Assuming nonce resets or is 1 for this test case
+
+        // Accept task
+        const acceptResult = simnet.callPublicFn(
+            'bittask',
+            'accept-task',
+            [taskId],
+            worker
+        );
+        expect(acceptResult.result).toBeOk(Cl.bool(true));
+
+        // Verify status is in-progress
+        let task = simnet.callReadOnlyFn('bittask', 'get-task', [taskId], deployer);
+        expect(task.result).toBeSome(Cl.tuple({
+            title: Cl.stringAscii("Task 3"),
+            description: Cl.stringAscii("Desc 3"),
+            creator: Cl.principal(wallet1),
+            worker: Cl.some(Cl.principal(worker)),
+            amount: Cl.uint(amount),
+            deadline: Cl.uint(deadline),
+            status: Cl.stringAscii("in-progress"),
+            submission: Cl.none(),
+            'created-at': Cl.uint(creationHeight)
+        }));
+
+        // Submit work
+        const submission = "https://github.com/my-pr";
+        const submitResult = simnet.callPublicFn(
+            'bittask',
+            'submit-work',
+            [taskId, Cl.stringAscii(submission)],
+            worker
+        );
+        expect(submitResult.result).toBeOk(Cl.bool(true));
+
+        // Verify status is submitted
+        task = simnet.callReadOnlyFn('bittask', 'get-task', [taskId], deployer);
+        expect(task.result).toBeSome(Cl.tuple({
+            title: Cl.stringAscii("Task 3"),
+            description: Cl.stringAscii("Desc 3"),
+            creator: Cl.principal(wallet1),
+            worker: Cl.some(Cl.principal(worker)),
+            amount: Cl.uint(amount),
+            deadline: Cl.uint(deadline),
+            status: Cl.stringAscii("submitted"),
+            submission: Cl.some(Cl.stringAscii(submission)),
+            'created-at': Cl.uint(creationHeight)
+        }));
+    });
+
     it('ensure that get-tasks returns multiple tasks', () => {
         const amount = 500;
         const deadline = simnet.blockHeight + 100;
@@ -138,6 +209,7 @@ describe('bittask contract', () => {
             amount: Cl.uint(amount),
             deadline: Cl.uint(deadline),
             status: Cl.stringAscii("open"),
+            submission: Cl.none(),
             'created-at': Cl.uint(height1)
         });
 
@@ -149,6 +221,7 @@ describe('bittask contract', () => {
             amount: Cl.uint(amount),
             deadline: Cl.uint(deadline),
             status: Cl.stringAscii("open"),
+            submission: Cl.none(),
             'created-at': Cl.uint(height2)
         });
 
@@ -209,6 +282,7 @@ describe('bittask contract', () => {
             amount: Cl.uint(amount),
             deadline: Cl.uint(deadline),
             status: Cl.stringAscii("in-progress"),
+            submission: Cl.none(),
             'created-at': Cl.uint(createdBlockHeight)
         }));
     });
@@ -237,7 +311,7 @@ describe('bittask contract', () => {
             [Cl.uint(1)],
             wallet1
         );
-        expect(result.result).toBeErr(Cl.uint(107)); // ERR-CREATOR-CANNOT-ACCEPT
+        expect(result.result).toBeErr(Cl.uint(106)); // ERR-CREATOR-CANNOT-ACCEPT
     });
 
     it('ensure that task cannot be accepted if not open', () => {
@@ -274,6 +348,6 @@ describe('bittask contract', () => {
             [Cl.uint(1)],
             user3
         );
-        expect(result.result).toBeErr(Cl.uint(106)); // ERR-NOT-OPEN
+        expect(result.result).toBeErr(Cl.uint(107)); // ERR-NOT-OPEN
     });
 });

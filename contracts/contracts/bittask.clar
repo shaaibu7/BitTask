@@ -8,8 +8,10 @@
 (define-constant ERR-PAST-DEADLINE (err u103))
 (define-constant ERR-EMPTY-TITLE (err u104))
 (define-constant ERR-EMPTY-DESCRIPTION (err u105))
-(define-constant ERR-NOT-OPEN (err u106))
-(define-constant ERR-CREATOR-CANNOT-ACCEPT (err u107))
+(define-constant ERR-CREATOR-CANNOT-ACCEPT (err u106))
+(define-constant ERR-NOT-OPEN (err u107))
+(define-constant ERR-NOT-IN-PROGRESS (err u108))
+(define-constant ERR-NOT-WORKER (err u109))
 
 ;; Data Vars
 (define-data-var task-nonce uint u0)
@@ -25,6 +27,7 @@
         amount: uint,
         deadline: uint,
         status: (string-ascii 20), ;; "open", "in-progress", "submitted", "completed", "disputed"
+        submission: (optional (string-ascii 256)), ;; Proof of work link/hash
         created-at: uint,
     }
 )
@@ -67,6 +70,7 @@
             amount: amount,
             deadline: deadline,
             status: "open",
+            submission: none,
             created-at: stacks-block-height,
         })
 
@@ -111,6 +115,40 @@
             event: "accepted",
             id: id,
             worker: tx-sender,
+        })
+
+        (ok true)
+    )
+)
+
+;; @desc Submit work for a task
+;; @param id uint - Task ID
+;; @param submission (string-ascii 256) - Link or hash of the work
+(define-public (submit-work
+        (id uint)
+        (submission (string-ascii 256))
+    )
+    (let ((task (unwrap! (map-get? Tasks id) ERR-INVALID-ID)))
+        ;; Check status is in-progress
+        (asserts! (is-eq (get status task) "in-progress") ERR-NOT-IN-PROGRESS)
+
+        ;; Check sender is the worker
+        (asserts! (is-eq (some tx-sender) (get worker task)) ERR-NOT-WORKER)
+
+        ;; Update task
+        (map-set Tasks id
+            (merge task {
+                status: "submitted",
+                submission: (some submission),
+            })
+        )
+
+        ;; Emit event
+        (print {
+            event: "submitted",
+            id: id,
+            worker: tx-sender,
+            submission: submission,
         })
 
         (ok true)
