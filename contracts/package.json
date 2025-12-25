@@ -1,4 +1,3 @@
-
 {
   "name": "bittask-tests",
   "version": "1.0.0",
@@ -14,10 +13,16 @@
   "license": "ISC",
   "dependencies": {
     "@stacks/clarinet-sdk": "^3.9.0",
+    "@stacks/network": "^7.3.1",
     "@stacks/transactions": "^7.2.0",
-    "@types/node": "^24.4.0",
+    "@stacks/wallet-sdk": "^7.2.0",
     "chokidar-cli": "^3.0.0",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
     "vitest": "^4.0.7",
     "vitest-environment-clarinet": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3"
   }
 }
