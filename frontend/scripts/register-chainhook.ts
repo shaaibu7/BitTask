@@ -18,21 +18,20 @@ async function registerChainhook() {
         chain: 'stacks',
         network: getChainhooksNetwork() as 'mainnet' | 'testnet',
         version: '1',
-        networks: {
-            [getChainhooksNetwork()]: {
-                if_this: {
-                    scope: 'contract_call',
+        filters: {
+            events: [
+                {
+                    type: 'contract_call',
                     contract_identifier: `${CONTRACT_ADDRESS}.${CONTRACT_NAME}`,
-                    method: 'create-task', // Listen for create-task calls
-                },
-                then_that: {
-                    http_post: {
-                        url: WEBHOOK_URL,
-                        authorization_header: `Bearer ${process.env.CHAINHOOKS_SECRET || ''}`
-                    }
+                    function_name: 'create-task', // Listen for create-task calls
                 }
-            }
-        }
+            ]
+        },
+        action: {
+            type: 'http_post',
+            url: WEBHOOK_URL,
+            authorization_header: `Bearer ${process.env.CHAINHOOKS_SECRET || ''}`
+        } as any
     };
 
     try {
