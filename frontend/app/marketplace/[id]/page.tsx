@@ -9,13 +9,20 @@ import Link from 'next/link';
 export default function TaskDetailPage() {
     const params = useParams();
     const router = useRouter();
-    const taskId = parseInt(params.id as string);
+    // Safely parse ID, defaulting to NaN if invalid
+    const taskId = params?.id ? parseInt(Array.isArray(params.id) ? params.id[0] : params.id) : NaN;
 
     const [task, setTask] = useState<Task | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (isNaN(taskId)) {
+            setError('Invalid Task ID');
+            setIsLoading(false);
+            return;
+        }
+
         async function loadTask() {
             try {
                 const tasks = await fetchTasks();
@@ -35,6 +42,19 @@ export default function TaskDetailPage() {
 
         loadTask();
     }, [taskId]);
+
+    const safeDate = (timestamp: number) => {
+        if (!timestamp || isNaN(timestamp)) return 'No Deadline';
+        try {
+            return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            });
+        } catch (e) {
+            return 'Invalid Date';
+        }
+    };
 
     if (isLoading) {
         return (
@@ -114,11 +134,7 @@ export default function TaskDetailPage() {
                             <div>
                                 <p className="text-gray-500 text-sm">Deadline</p>
                                 <p className={`text-lg font-semibold ${isExpired ? 'text-red-400' : 'text-white'}`}>
-                                    {new Date(task.deadline * 1000).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                    })}
+                                    {safeDate(task.deadline)}
                                 </p>
                                 {isExpired && <p className="text-red-400 text-sm mt-1">Expired</p>}
                             </div>
@@ -153,7 +169,7 @@ export default function TaskDetailPage() {
                 {/* Action Buttons */}
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 space-y-4">
                     <h2 className="text-xl font-bold mb-4">Actions</h2>
-                    
+
                     {task.status === 'open' && !isExpired && (
                         <button className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-semibold transition-colors">
                             Accept Task
