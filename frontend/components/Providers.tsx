@@ -2,6 +2,9 @@
 
 import { connect, disconnect as stackDisconnect } from '@stacks/connect';
 import { createContext, useContext, useEffect, useState } from 'react';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { wagmiAdapter } from '../lib/appkit-config';
 
 // Define a type for the wallet info based on usage or library types
 // We use 'any' for now to match the user's snippet flexibility or define a specific interface
@@ -15,6 +18,9 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Create query client for Wagmi
+const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -80,9 +86,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // I will follow the snippet pattern closely.
 
     return (
-        <AuthContext.Provider value={{ isConnected, walletInfo, bnsName, connectWallet, disconnectWallet }}>
-            {children}
-        </AuthContext.Provider>
+        <WagmiProvider adapter={wagmiAdapter} config={wagmiAdapter.wagmiConfig}>
+            <QueryClientProvider client={queryClient}>
+                <AuthContext.Provider value={{ isConnected, walletInfo, bnsName, connectWallet, disconnectWallet }}>
+                    {children}
+                </AuthContext.Provider>
+            </QueryClientProvider>
+        </WagmiProvider>
     );
 }
 
