@@ -169,3 +169,35 @@ export async function approveWork(
     throw error;
   }
 }
+
+export async function rejectWork(
+  userSession: UserSession,
+  taskId: number,
+  options?: ContractCallOptions
+): Promise<void> {
+  try {
+    await openContractCall({
+      contractAddress: CONTRACT_ADDRESS,
+      contractName: CONTRACT_NAME,
+      functionName: 'reject-work',
+      functionArgs: [uintCV(taskId)],
+      network,
+      userSession,
+      onFinish: (data) => {
+        console.log('Work rejected:', data);
+        const txId = data?.txId || data?.txid || data?.response?.txid || data?.stacksTransaction?.txid();
+        if (txId && options?.onTransactionId) {
+          options.onTransactionId(txId);
+        }
+        options?.onFinish?.(data);
+      },
+      onCancel: () => {
+        console.log('Transaction cancelled');
+        options?.onCancel?.();
+      },
+    });
+  } catch (error) {
+    console.error('Error rejecting work:', error);
+    throw error;
+  }
+}

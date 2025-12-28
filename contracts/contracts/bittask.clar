@@ -14,6 +14,7 @@
 (define-constant ERR-NOT-WORKER (err u109))
 (define-constant ERR-NOT-SUBMITTED (err u110))
 (define-constant ERR-NOT-CREATOR (err u111))
+(define-constant ERR-ALREADY-COMPLETED (err u112))
 
 ;; Data Vars
 (define-data-var task-nonce uint u0)
