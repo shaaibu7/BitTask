@@ -493,4 +493,53 @@ describe("ERC1155 Multi-Token Contract", () => {
       expect(uri.result).toBeOk(Cl.stringAscii(""));
     });
   });
+
+  describe("Total Supply Tracking", () => {
+    beforeEach(() => {
+      // Mint tokens for testing
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(100)],
+        deployer
+      );
+    });
+
+    it("should track total supply correctly", () => {
+      const supply = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-total-supply",
+        [Cl.uint(1)],
+        deployer
+      );
+      expect(supply.result).toBeOk(Cl.uint(100));
+    });
+
+    it("should update supply after burning", () => {
+      simnet.callPublicFn(
+        "erc1155",
+        "burn-tokens",
+        [Cl.principal(alice), Cl.uint(1), Cl.uint(30)],
+        alice
+      );
+
+      const supply = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-total-supply",
+        [Cl.uint(1)],
+        deployer
+      );
+      expect(supply.result).toBeOk(Cl.uint(70));
+    });
+
+    it("should return zero supply for non-existent tokens", () => {
+      const supply = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-total-supply",
+        [Cl.uint(999)],
+        deployer
+      );
+      expect(supply.result).toBeOk(Cl.uint(0));
+    });
+  });
 });
