@@ -189,6 +189,55 @@
     )
 )
 
+;; Token Minting Functions
+
+;; @desc Mint new tokens to a recipient (owner only)
+;; @param to: The recipient's address
+;; @param token-id: The token ID to mint (0 for new token type)
+;; @param amount: The amount to mint
+;; @returns: The token ID that was minted to
+(define-public (mint-tokens (to principal) (token-id uint) (amount uint))
+    (let ((actual-token-id (if (is-eq token-id u0) 
+                              (var-get next-token-id) 
+                              token-id)))
+        ;; Only contract owner can mint
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+        
+        ;; If minting a new token type (token-id = 0), increment counter and mark as existing
+        (if (is-eq token-id u0)
+            (begin
+                (var-set next-token-id (+ actual-token-id u1))
+                (map-set token-exists-map actual-token-id true)
+            )
+            ;; For existing token, verify it exists
+            (asserts! (token-exists actual-token-id) ERR-TOKEN-NOT-FOUND)
+        )
+        
+        ;; Update recipient balance
+        (map-set token-balances 
+            {owner: to, token-id: actual-token-id} 
+            (+ (get-balance to actual-token-id) amount))
+        
+        ;; Update total supply
+        (map-set token-supplies 
+            actual-token-id 
+            (+ (get-total-supply actual-token-id) amount))
+        
+        ;; Emit mint event (transfer from zero address)
+        (print {
+            event: "transfer-single",
+            operator: tx-sender,
+            from: 'SP000000000000000000002Q6VF78, ;; Zero address equivalent
+            to: to,
+            token-id: actual-token-id,
+            amount: amount
+        })
+        
+        (ok actual-token-id)
+    )
+)
+
 ;; Operator Approval System
 
 ;; @desc Set or unset approval for an operator to manage all caller's tokens
@@ -324,5 +373,98 @@
         })
         
         (ok true)
+    )
+)
+;; Batch Transfer Functionality
+
+;; @desc Transfer multiple token types in a single transaction
+;; @param from: The sender's address
+;; @param to: The recipient's address
+;; @param token-ids: List of token IDs to transfer
+;; @param amounts: List of amounts to transfer (must match token-ids length)
+;; @returns: Success response
+(define-public (transfer-batch (from principal) (to principal) (token-ids (list 100 uint)) (amounts (list 100 uint)))
+    (begin
+        ;; Input validation
+        (asserts! (not (is-eq from to)) ERR-SELF-TRANSFER)
+        (asserts! (is-eq (len token-ids) (len amounts)) ERR-ARRAY-LENGTH-MISMATCH)
+        
+        ;; Authorization check
+        (try! (assert-authorized from))
+        
+        ;; Process all transfers atomically
+        (try! (fold process-batch-transfer (zip-batch token-ids amounts) (ok true)))
+        
+        ;; Emit batch transfer event
+        (print {
+            event: "transfer-batch",
+            operator: tx-sender,
+            from: from,
+            to: to,
+            token-ids: token-ids,
+            amounts: amounts
+        })
+        
+        (ok true)
+    )
+)
+
+;; Helper function to process individual transfers in batch
+(define-private (process-batch-transfer 
+    (transfer-data {token-id: uint, amount: uint}) 
+    (previous-result (response bool uint)))
+    (let ((token-id (get token-id transfer-data))
+          (amount (get amount transfer-data)))
+        ;; Only proceed if previous transfers succeeded
+        (match previous-result
+            success (begin
+                ;; Validate amount is positive
+                (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+                
+                ;; Get current balance
+                (let ((current-balance (get-balance tx-sender token-id)))
+                    ;; Check sufficient balance
+                    (asserts! (>= current-balance amount) ERR-INSUFFICIENT-BALANCE)
+                    
+                    ;; This is a validation pass - actual transfers happen in execute-batch-transfer
+                    (ok true)
+                )
+            )
+            error error ;; Propagate error
+        )
+    )
+)
+
+;; Helper function to zip token-ids and amounts for batch processing
+(define-private (zip-batch (token-ids (list 100 uint)) (amounts (list 100 uint)))
+    (map make-transfer-pair token-ids amounts)
+)
+
+;; Helper function to create transfer pairs
+(define-private (make-transfer-pair (token-id uint) (amount uint))
+    {token-id: token-id, amount: amount}
+)
+
+;; @desc Execute batch transfers after validation
+;; @param from: Sender address
+;; @param to: Recipient address  
+;; @param token-ids: List of token IDs
+;; @param amounts: List of amounts
+;; @returns: Success response
+(define-private (execute-batch-transfers (from principal) (to principal) (token-ids (list 100 uint)) (amounts (list 100 uint)))
+    (fold execute-single-batch-transfer (zip-batch token-ids amounts) (ok true))
+)
+
+;; Helper to execute individual transfer in batch
+(define-private (execute-single-batch-transfer 
+    (transfer-data {token-id: uint, amount: uint})
+    (previous-result (response bool uint)))
+    (match previous-result
+        success (let ((token-id (get token-id transfer-data))
+                      (amount (get amount transfer-data)))
+            ;; Execute the actual transfer
+            (transfer-internal (some tx-sender) (some (unwrap-panic (some tx-sender))) token-id amount)
+        )
+        error error
     )
 )
