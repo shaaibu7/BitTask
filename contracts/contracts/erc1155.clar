@@ -238,6 +238,45 @@
     )
 )
 
+;; Token Burning Functions
+
+;; @desc Burn tokens from an address (owner or approved operator only)
+;; @param from: The address to burn tokens from
+;; @param token-id: The token ID to burn
+;; @param amount: The amount to burn
+;; @returns: Success response
+(define-public (burn-tokens (from principal) (token-id uint) (amount uint))
+    (let ((current-balance (get-balance from token-id)))
+        ;; Input validation
+        (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+        (asserts! (>= current-balance amount) ERR-INSUFFICIENT-BALANCE)
+        (asserts! (is-authorized from tx-sender) ERR-UNAUTHORIZED)
+        (asserts! (token-exists token-id) ERR-TOKEN-NOT-FOUND)
+        
+        ;; Update balance
+        (map-set token-balances 
+            {owner: from, token-id: token-id} 
+            (- current-balance amount))
+        
+        ;; Update total supply
+        (map-set token-supplies 
+            token-id 
+            (- (get-total-supply token-id) amount))
+        
+        ;; Emit burn event (transfer to zero address)
+        (print {
+            event: "transfer-single",
+            operator: tx-sender,
+            from: from,
+            to: 'SP000000000000000000002Q6VF78, ;; Zero address equivalent
+            token-id: token-id,
+            amount: amount
+        })
+        
+        (ok true)
+    )
+)
+
 ;; Operator Approval System
 
 ;; @desc Set or unset approval for an operator to manage all caller's tokens
