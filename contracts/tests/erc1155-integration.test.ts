@@ -112,4 +112,108 @@ describe("ERC1155 Integration Tests", () => {
       expect(failedTransfer.result).toBeErr(Cl.uint(101)); // ERR-UNAUTHORIZED
     });
   });
+
+  describe("Complex Batch Operations", () => {
+    it("should handle mixed batch operations with multiple users", () => {
+      // Setup: Mint different tokens to Alice
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(100)],
+        deployer
+      );
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(200)],
+        deployer
+      );
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(300)],
+        deployer
+      );
+
+      // Batch transfer different amounts of different tokens
+      const batchResult = simnet.callPublicFn(
+        "erc1155",
+        "transfer-batch",
+        [
+          Cl.principal(alice),
+          Cl.principal(bob),
+          Cl.list([Cl.uint(1), Cl.uint(2), Cl.uint(3)]),
+          Cl.list([Cl.uint(50), Cl.uint(100), Cl.uint(150)])
+        ],
+        alice
+      );
+      expect(batchResult.result).toBeOk(Cl.bool(true));
+
+      // Verify all balances
+      const bobBalance1 = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(bob), Cl.uint(1)],
+        deployer
+      );
+      const bobBalance2 = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(bob), Cl.uint(2)],
+        deployer
+      );
+      const bobBalance3 = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(bob), Cl.uint(3)],
+        deployer
+      );
+
+      expect(bobBalance1.result).toBeOk(Cl.uint(50));
+      expect(bobBalance2.result).toBeOk(Cl.uint(100));
+      expect(bobBalance3.result).toBeOk(Cl.uint(150));
+    });
+
+    it("should handle batch operations with duplicate token IDs", () => {
+      // Mint tokens
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(1000)],
+        deployer
+      );
+
+      // Batch transfer with duplicate token IDs (should process each separately)
+      const batchResult = simnet.callPublicFn(
+        "erc1155",
+        "transfer-batch",
+        [
+          Cl.principal(alice),
+          Cl.principal(bob),
+          Cl.list([Cl.uint(1), Cl.uint(1), Cl.uint(1)]),
+          Cl.list([Cl.uint(100), Cl.uint(200), Cl.uint(300)])
+        ],
+        alice
+      );
+      expect(batchResult.result).toBeOk(Cl.bool(true));
+
+      // Bob should have received total of 600 tokens
+      const bobBalance = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(bob), Cl.uint(1)],
+        deployer
+      );
+      expect(bobBalance.result).toBeOk(Cl.uint(600));
+
+      // Alice should have 400 remaining
+      const aliceBalance = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(alice), Cl.uint(1)],
+        deployer
+      );
+      expect(aliceBalance.result).toBeOk(Cl.uint(400));
+    });
+  });
 });
