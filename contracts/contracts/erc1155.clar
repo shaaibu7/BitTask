@@ -461,6 +461,39 @@
     )
 )
 
+;; Utility Functions
+
+;; @desc Check if a token has any circulating supply
+;; @param token-id: The token ID to check
+;; @returns: True if token has supply > 0
+(define-read-only (has-supply (token-id uint))
+    (> (get-total-supply token-id) u0)
+)
+
+;; @desc Get multiple token supplies in one call
+;; @param token-ids: List of token IDs to query
+;; @returns: List of total supplies
+(define-read-only (get-total-supply-batch (token-ids (list 100 uint)))
+    (map get-total-supply token-ids)
+)
+
+;; @desc Check if multiple tokens exist
+;; @param token-ids: List of token IDs to check
+;; @returns: List of existence status
+(define-read-only (token-exists-batch (token-ids (list 100 uint)))
+    (map token-exists token-ids)
+)
+
+;; @desc Get contract information summary
+;; @returns: Contract metadata and stats
+(define-read-only (get-contract-info)
+    {
+        owner: (var-get contract-owner),
+        next-token-id: (var-get next-token-id),
+        total-token-types: (- (var-get next-token-id) u1)
+    }
+)
+
 ;; Operator Approval System
 
 ;; @desc Set or unset approval for an operator to manage all caller's tokens
