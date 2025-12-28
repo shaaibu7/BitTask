@@ -14,6 +14,7 @@
 (define-constant ERR-NOT-WORKER (err u109))
 (define-constant ERR-NOT-SUBMITTED (err u110))
 (define-constant ERR-NOT-CREATOR (err u111))
+(define-constant ERR-ALREADY-COMPLETED (err u112))
 
 ;; Data Vars
 (define-data-var task-nonce uint u0)
@@ -169,15 +170,17 @@
 
         ;; Get worker principal
         (let ((worker-principal (unwrap! (get worker task) ERR-NOT-WORKER)))
-            ;; Transfer STX from contract to worker
-            (try! (as-contract (stx-transfer? (get amount task) tx-sender worker-principal)))
-
-            ;; Update task status
+            ;; Update task status before transfer to prevent re-entrancy attacks
+            ;; Following Checks-Effects-Interactions pattern: update state (Effect) before external call (Interaction)
             (map-set Tasks id
                 (merge task {
                     status: "completed",
                 })
             )
+
+            ;; Transfer STX from contract to worker
+            ;; If transfer fails, entire transaction (including state change) will be reverted
+            (try! (as-contract (stx-transfer? (get amount task) tx-sender worker-principal)))
 
             ;; Emit event
             (print {
@@ -190,6 +193,40 @@
 
             (ok true)
         )
+    )
+)
+
+;; @desc Reject submitted work and refund to creator
+;; @param id uint - Task ID
+(define-public (reject-work (id uint))
+    (let ((task (unwrap! (map-get? Tasks id) ERR-INVALID-ID)))
+        ;; Check that sender is the creator
+        (asserts! (is-eq tx-sender (get creator task)) ERR-NOT-CREATOR)
+
+        ;; Check that status is submitted
+        (asserts! (is-eq (get status task) "submitted") ERR-NOT-SUBMITTED)
+
+        ;; Update task status to open (allows creator to reclaim or reassign)
+        (map-set Tasks id
+            (merge task {
+                status: "open",
+                worker: none,
+                submission: none,
+            })
+        )
+
+        ;; Refund STX from contract back to creator
+        (try! (as-contract (stx-transfer? (get amount task) tx-sender (get creator task))))
+
+        ;; Emit event
+        (print {
+            event: "rejected",
+            id: id,
+            creator: tx-sender,
+            amount: (get amount task),
+        })
+
+        (ok true)
     )
 )
 

@@ -4,15 +4,24 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../components/Providers';
 import { useStacksWallet } from '../../lib/stacks-wallet';
+import { useTransactionTracker } from '../../lib/transactionTracker';
 import { showNotification } from '../../lib/notifications';
 import { createTask } from '../../lib/contractActions';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
+// Stacks API endpoints
+const STACKS_MAINNET_API = 'https://api.stacks.co';
+const STACKS_TESTNET_API = 'https://api.testnet.stacks.co';
+
+// Fallback block height approximation (mainnet)
+const FALLBACK_APPROXIMATE_MAINNET_HEIGHT = 100000;
+
 export default function CreateTaskPage() {
     const router = useRouter();
     const { isConnected } = useAuth();
     const { userSession } = useStacksWallet();
+    const { addTransaction } = useTransactionTracker();
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
         title: '',
@@ -90,16 +99,16 @@ export default function CreateTaskPage() {
             // Fetch current block height from Stacks API
             let currentBlockHeight = 0;
             try {
-                const network = process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet' 
-                    ? 'https://api.stacks.co' 
-                    : 'https://api.testnet.stacks.co';
-                const response = await fetch(`${network}/v2/info`);
+                const apiUrl = process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet' 
+                    ? STACKS_MAINNET_API 
+                    : STACKS_TESTNET_API;
+                const response = await fetch(`${apiUrl}/v2/info`);
                 const info = await response.json();
                 currentBlockHeight = info.stacks_tip_height || 0;
             } catch (e) {
                 console.warn('Could not fetch current block height, using approximation', e);
                 // Fallback: assume we're at a reasonable block height
-                currentBlockHeight = 100000; // Approximate current mainnet height
+                currentBlockHeight = FALLBACK_APPROXIMATE_MAINNET_HEIGHT;
             }
 
             const deadlineBlockHeight = currentBlockHeight + blocksFromNow + 1;
@@ -115,12 +124,20 @@ export default function CreateTaskPage() {
                 amount, // Will be converted to micro-STX in contractActions
                 deadlineBlockHeight,
                 {
+                    onTransactionId: (txId) => {
+                        addTransaction({
+                            txId,
+                            status: 'pending',
+                            timestamp: Date.now(),
+                            type: 'create-task',
+                        });
+                        showNotification.success(
+                            'Transaction submitted!', 
+                            'Your task is being created on the blockchain...'
+                        );
+                    },
                     onFinish: (data) => {
                         console.log('Task created successfully:', data);
-                        showNotification.success(
-                            'Task created successfully!', 
-                            'Your transaction is being processed...'
-                        );
                         // Redirect after a short delay
                         setTimeout(() => {
                             router.push('/marketplace');

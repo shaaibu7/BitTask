@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 
 import { Providers } from "@/components/Providers";
 import { Navbar } from "@/components/Navbar";
+import { TransactionStatus } from "@/components/TransactionStatus";
 
 export default function RootLayout({
   children,
@@ -34,6 +35,7 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           {children}
+          <TransactionStatus />
           <Toaster position="top-right" theme="dark" />
         </Providers>
       </body>

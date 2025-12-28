@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Task, fetchTasks } from '../../../lib/contracts';
-import { acceptTask, submitWork, approveWork } from '../../../lib/contractActions';
+import { acceptTask, submitWork, approveWork, rejectWork } from '../../../lib/contractActions';
 import { useAuth } from '../../../components/Providers';
 import { useStacksWallet } from '../../../lib/stacks-wallet';
+import { useTransactionTracker } from '../../../lib/transactionTracker';
 import { showNotification } from '../../../lib/notifications';
 import { ArrowLeft, Loader2, Clock, User, DollarSign, CheckCircle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -18,6 +19,7 @@ export default function TaskDetailPage() {
 
     const { isConnected, address } = useAuth();
     const { userSession } = useStacksWallet();
+    const { addTransaction } = useTransactionTracker();
     const [task, setTask] = useState<Task | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -98,6 +100,15 @@ export default function TaskDetailPage() {
         setIsActionLoading(true);
         try {
             await submitWork(userSession, taskId, submissionText.trim(), {
+                onTransactionId: (txId) => {
+                    addTransaction({
+                        txId,
+                        status: 'pending',
+                        timestamp: Date.now(),
+                        type: 'submit-work',
+                        taskId,
+                    });
+                },
                 onFinish: async (data) => {
                     showNotification.success('Work submitted!', 'Waiting for creator approval');
                     setShowSubmitModal(false);
@@ -120,6 +131,15 @@ export default function TaskDetailPage() {
         setIsActionLoading(true);
         try {
             await approveWork(userSession, taskId, {
+                onTransactionId: (txId) => {
+                    addTransaction({
+                        txId,
+                        status: 'pending',
+                        timestamp: Date.now(),
+                        type: 'approve-work',
+                        taskId,
+                    });
+                },
                 onFinish: async (data) => {
                     showNotification.success('Work approved!', 'Payment has been released to the worker');
                     await reloadTask();
@@ -132,6 +152,39 @@ export default function TaskDetailPage() {
         } catch (error) {
             console.error('Failed to approve work', error);
             showNotification.error('Failed to approve work', 'Please try again');
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleRejectWork = async () => {
+        if (!confirm('Are you sure you want to reject this work? The task will be reopened and you will receive a refund.')) {
+            return;
+        }
+
+        setIsActionLoading(true);
+        try {
+            await rejectWork(userSession, taskId, {
+                onTransactionId: (txId) => {
+                    addTransaction({
+                        txId,
+                        status: 'pending',
+                        timestamp: Date.now(),
+                        type: 'reject-work',
+                        taskId,
+                    });
+                },
+                onFinish: async (data) => {
+                    showNotification.success('Work rejected!', 'Funds have been refunded to you');
+                    await reloadTask();
+                    setIsActionLoading(false);
+                },
+                onCancel: () => {
+                    setIsActionLoading(false);
+                },
+            });
+        } catch (error) {
+            console.error('Failed to reject work', error);
+            showNotification.error('Failed to reject work', 'Please try again');
             setIsActionLoading(false);
         }
     };
@@ -300,9 +353,14 @@ export default function TaskDetailPage() {
                                 {isActionLoading && <Loader2 className="h-5 w-5 animate-spin" />}
                                 Approve Work
                             </button>
-                            <div className="text-center py-2 text-sm text-gray-400">
-                                Rejection functionality coming soon
-                            </div>
+                            <button
+                                onClick={handleRejectWork}
+                                disabled={isActionLoading}
+                                className="w-full py-3 px-6 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isActionLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+                                Reject Work
+                            </button>
                         </div>
                     )}
 
