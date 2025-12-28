@@ -171,3 +171,13 @@ describe('BitToken Contract', () => {
     const newOwner = simnet.callReadOnlyFn('token', 'get-contract-owner', [], deployer);
     expect(newOwner.result).toBePrincipal(alice);
   });
+  it('should fail ownership transfer when not owner', () => {
+    const setOwner = simnet.callPublicFn(
+      'token', 
+      'set-contract-owner', 
+      [Cl.principal(bob)], 
+      alice // Alice trying to transfer ownership
+    );
+    
+    expect(setOwner.result).toBeErr(Cl.uint(3)); // ERR-UNAUTHORIZED
+  });
