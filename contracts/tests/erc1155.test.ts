@@ -697,4 +697,68 @@ describe("ERC1155 Multi-Token Contract", () => {
       expect(owner.result).toBeOk(Cl.principal('SP000000000000000000002Q6VF78'));
     });
   });
+
+  describe("Pause Mechanism", () => {
+    it("should pause contract successfully", () => {
+      const result = simnet.callPublicFn(
+        "erc1155",
+        "pause-contract",
+        [],
+        deployer
+      );
+      expect(result.result).toBeOk(Cl.bool(true));
+
+      const isPaused = simnet.callReadOnlyFn(
+        "erc1155",
+        "is-paused",
+        [],
+        deployer
+      );
+      expect(isPaused.result).toBeOk(Cl.bool(true));
+    });
+
+    it("should unpause contract successfully", () => {
+      // First pause
+      simnet.callPublicFn("erc1155", "pause-contract", [], deployer);
+
+      // Then unpause
+      const result = simnet.callPublicFn(
+        "erc1155",
+        "unpause-contract",
+        [],
+        deployer
+      );
+      expect(result.result).toBeOk(Cl.bool(true));
+
+      const isPaused = simnet.callReadOnlyFn(
+        "erc1155",
+        "is-paused",
+        [],
+        deployer
+      );
+      expect(isPaused.result).toBeOk(Cl.bool(false));
+    });
+
+    it("should reject operations when paused", () => {
+      // Mint tokens first
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(100)],
+        deployer
+      );
+
+      // Pause contract
+      simnet.callPublicFn("erc1155", "pause-contract", [], deployer);
+
+      // Try to transfer (should fail)
+      const result = simnet.callPublicFn(
+        "erc1155",
+        "transfer-single",
+        [Cl.principal(alice), Cl.principal(bob), Cl.uint(1), Cl.uint(30)],
+        alice
+      );
+      expect(result.result).toBeErr(Cl.uint(101)); // ERR-UNAUTHORIZED
+    });
+  });
 });
