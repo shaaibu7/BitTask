@@ -49,3 +49,10 @@
 (define-public (get-total-supply)
     (ok TOTAL-SUPPLY)
 )
+(define-public (approve (spender principal) (amount uint))
+    (begin
+        (map-set allowances {owner: tx-sender, spender: spender} amount)
+        (print {action: "approve", owner: tx-sender, spender: spender, amount: amount})
+        (ok true)
+    )
+)
