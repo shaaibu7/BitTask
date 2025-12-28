@@ -196,6 +196,40 @@
     )
 )
 
+;; @desc Reject submitted work and refund to creator
+;; @param id uint - Task ID
+(define-public (reject-work (id uint))
+    (let ((task (unwrap! (map-get? Tasks id) ERR-INVALID-ID)))
+        ;; Check that sender is the creator
+        (asserts! (is-eq tx-sender (get creator task)) ERR-NOT-CREATOR)
+
+        ;; Check that status is submitted
+        (asserts! (is-eq (get status task) "submitted") ERR-NOT-SUBMITTED)
+
+        ;; Update task status to open (allows creator to reclaim or reassign)
+        (map-set Tasks id
+            (merge task {
+                status: "open",
+                worker: none,
+                submission: none,
+            })
+        )
+
+        ;; Refund STX from contract back to creator
+        (try! (as-contract (stx-transfer? (get amount task) tx-sender (get creator task))))
+
+        ;; Emit event
+        (print {
+            event: "rejected",
+            id: id,
+            creator: tx-sender,
+            amount: (get amount task),
+        })
+
+        (ok true)
+    )
+)
+
 ;; Read-only functions
 
 (define-read-only (get-task (id uint))
