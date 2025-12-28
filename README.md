@@ -41,11 +41,11 @@ stateDiagram-v2
     [*] --> Open: create-task
     
     state Open {
-        [*] --> InProgress: accept-task (Future)
+        [*] --> InProgress: accept-task
     }
     
-    InProgress --> Submitted: submit-work (Future)
-    Submitted --> Completed: approve-work (Future)
+    InProgress --> Submitted: submit-work
+    Submitted --> Completed: approve-work
     
     state Completed {
         [*] --> FundsReleased
@@ -88,6 +88,15 @@ Ensure you have the following installed:
     npm install
     ```
 
+3.  **Configure Environment Variables**
+    Create a `.env.local` file in the `frontend` directory:
+    ```bash
+    cd frontend
+    echo "NEXT_PUBLIC_STACKS_NETWORK=testnet" > .env.local
+    ```
+    
+    Set `NEXT_PUBLIC_STACKS_NETWORK` to `testnet` for development or `mainnet` for production.
+
 ## 🧪 Testing
 
 This project uses Vitest with `vitest-environment-clarinet` for comprehensive unit testing.
@@ -121,9 +130,9 @@ The project includes scripts to facilitate deployment to the Stacks network (Tes
 | `create-task` | Public | Creates a new task with title, description, reward, and deadline. |
 | `get-task` | Read-Only | Retrieves details of a specific task. |
 | `get-nonce` | Read-Only | Retrieves the current total number of tasks. |
-| `accept-task` | Public | *Coming Soon* - Assigns a worker to a task. |
-| `submit-work` | Public | *Coming Soon* - Submits proof of work. |
-| `approve-work` | Public | *Coming Soon* - Appproves work and releases funds. |
+| `accept-task` | Public | Assigns a worker to an open task. |
+| `submit-work` | Public | Submits proof of work for a task in progress. |
+| `approve-work` | Public | Approves submitted work and releases payment to worker. |
 
 ## 🤝 Contributing
 
