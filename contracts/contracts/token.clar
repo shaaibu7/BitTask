@@ -91,3 +91,9 @@
         (ok true)
     )
 )
+(define-read-only (get-contract-owner)
+    (var-get contract-owner)
+)
+
+;; Define the fungible token
+(define-fungible-token bittoken TOTAL-SUPPLY)
