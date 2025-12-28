@@ -18,3 +18,16 @@
 ;; Data maps
 (define-map balances principal uint)
 (define-map allowances {owner: principal, spender: principal} uint)
+
+;; Initialize contract with total supply to owner
+(map-set balances tx-sender TOTAL-SUPPLY)
+
+;; SIP-010 trait implementation
+(define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
+    (begin
+        (asserts! (is-eq tx-sender sender) ERR-UNAUTHORIZED)
+        (try! (ft-transfer? amount sender recipient))
+        (print memo)
+        (ok true)
+    )
+)
