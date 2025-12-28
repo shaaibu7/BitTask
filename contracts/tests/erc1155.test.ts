@@ -267,4 +267,50 @@ describe("ERC1155 Multi-Token Contract", () => {
       expect(result.result).toBeErr(Cl.uint(107)); // ERR-INVALID-PRINCIPAL
     });
   });
+
+  describe("Operator Transfers", () => {
+    beforeEach(() => {
+      // Mint tokens and set approval
+      simnet.callPublicFn(
+        "erc1155",
+        "mint-tokens",
+        [Cl.principal(alice), Cl.uint(0), Cl.uint(100)],
+        deployer
+      );
+      simnet.callPublicFn(
+        "erc1155",
+        "set-approval-for-all",
+        [Cl.principal(bob), Cl.bool(true)],
+        alice
+      );
+    });
+
+    it("should allow approved operator to transfer", () => {
+      const result = simnet.callPublicFn(
+        "erc1155",
+        "transfer-single",
+        [Cl.principal(alice), Cl.principal(charlie), Cl.uint(1), Cl.uint(30)],
+        bob
+      );
+      expect(result.result).toBeOk(Cl.bool(true));
+
+      const charlieBalance = simnet.callReadOnlyFn(
+        "erc1155",
+        "get-balance",
+        [Cl.principal(charlie), Cl.uint(1)],
+        deployer
+      );
+      expect(charlieBalance.result).toBeOk(Cl.uint(30));
+    });
+
+    it("should reject unauthorized operator transfer", () => {
+      const result = simnet.callPublicFn(
+        "erc1155",
+        "transfer-single",
+        [Cl.principal(alice), Cl.principal(charlie), Cl.uint(1), Cl.uint(30)],
+        charlie
+      );
+      expect(result.result).toBeErr(Cl.uint(101)); // ERR-UNAUTHORIZED
+    });
+  });
 });
