@@ -340,7 +340,7 @@
     (let ((token-ids-length (len token-ids))
           (amounts-length (len amounts)))
         ;; Check if contract is paused
-        (asserts! (not (var-get contract-paused)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         
         ;; Input validation
         (asserts! (is-eq token-ids-length amounts-length) ERR-ARRAY-LENGTH-MISMATCH)
