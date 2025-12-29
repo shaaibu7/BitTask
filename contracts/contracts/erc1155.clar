@@ -113,10 +113,10 @@
     (var-get contract-owner)
 )
 
-;; @desc Get total tokens created
-;; @returns: Total number of token types created
-(define-read-only (get-total-tokens-created)
-    (var-get total-tokens-created)
+;; @desc Get deployment time
+;; @returns: Block height when contract was deployed
+(define-read-only (get-deployment-time)
+    (var-get deployment-time)
 )
 
 ;; @desc Get the next token ID that will be assigned
