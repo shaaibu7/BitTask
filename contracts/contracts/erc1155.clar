@@ -24,8 +24,8 @@
 ;; Token ID counter for unique token generation
 (define-data-var next-token-id uint u1)
 
-;; Total tokens created counter
-(define-data-var total-tokens-created uint u0)
+;; Contract deployment timestamp
+(define-data-var deployment-time uint stacks-block-height)
 
 ;; Data Maps
 
