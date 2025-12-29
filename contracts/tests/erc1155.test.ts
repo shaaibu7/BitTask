@@ -940,6 +940,7 @@ describe("ERC1155 Multi-Token Contract", () => {
       );
       expect(paused.result).toBeOk(Cl.bool(false));
     });
+  });
 
     it("should handle multiple token types for same user", () => {
       // Mint different token types
