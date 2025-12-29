@@ -22,6 +22,9 @@
 ;; Token ID counter for unique token generation
 (define-data-var next-token-id uint u1)
 
+;; Total tokens created counter
+(define-data-var total-tokens-created uint u0)
+
 ;; Data Maps
 
 ;; Token balances: (owner, token-id) -> balance
