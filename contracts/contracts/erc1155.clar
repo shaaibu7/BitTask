@@ -114,6 +114,12 @@
     (var-get total-tokens-created)
 )
 
+;; @desc Get the next token ID that will be assigned
+;; @returns: The next available token ID
+(define-read-only (get-next-token-id)
+    (var-get next-token-id)
+)
+
 ;; @desc Get token URI for metadata
 ;; @param token-id: The token ID to query
 ;; @returns: The URI string (empty if not set)
