@@ -96,10 +96,10 @@
     (default-to u0 (map-get? token-supplies token-id))
 )
 
-;; @desc Get the contract owner
-;; @returns: The principal that owns this contract
-(define-read-only (get-contract-owner)
-    (var-get contract-owner)
+;; @desc Get contract version
+;; @returns: The contract version string
+(define-read-only (get-contract-version)
+    (var-get contract-version)
 )
 
 ;; @desc Get the next token ID that will be assigned
