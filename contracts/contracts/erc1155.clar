@@ -57,11 +57,10 @@
     (default-to u0 (map-get? token-balances {owner: owner, token-id: token-id}))
 )
 
-;; @desc Get multiple balances efficiently in a single call
-;; @param owners: List of principals to query
-;; @param token-ids: List of token IDs to query (must match owners length)
-;; @returns: List of balances corresponding to each owner/token-id pair
-(define-read-only (get-balance-batch (owners (list 100 principal)) (token-ids (list 100 uint)))
+;; @desc Validate batch size
+(define-private (validate-batch-size (size uint))
+    (asserts! (<= size MAX-BATCH-SIZE) ERR-ARRAY-LENGTH-MISMATCH)
+)
     (let ((owners-length (len owners))
           (token-ids-length (len token-ids)))
         ;; Ensure arrays have same length
