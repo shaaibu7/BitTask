@@ -1,5 +1,6 @@
 ;; ERC1155-like Multi-Token Contract
 ;; Implements multi-token functionality similar to ERC1155 standard
+;; Version 1.1
 
 ;; Constants and Error Codes
 (define-constant ERR-INSUFFICIENT-BALANCE (err u100))
@@ -10,12 +11,24 @@
 (define-constant ERR-ARRAY-LENGTH-MISMATCH (err u105))
 (define-constant ERR-TOKEN-NOT-FOUND (err u106))
 (define-constant ERR-INVALID-PRINCIPAL (err u107))
+;; Maximum batch size for operations
+(define-constant MAX-BATCH-SIZE u50)
+(define-constant ERR-CONTRACT-PAUSED (err u108))
 
 ;; Contract owner
 (define-data-var contract-owner principal tx-sender)
 
+;; Contract version
+(define-data-var contract-version (string-ascii 10) "1.1.0")
+
 ;; Token ID counter for unique token generation
 (define-data-var next-token-id uint u1)
+
+;; Contract deployment timestamp
+(define-data-var deployment-time uint stacks-block-height)
+
+;; Total tokens created counter
+(define-data-var total-tokens-created uint u0)
 
 ;; Data Maps
 
@@ -44,6 +57,11 @@
     (default-to u0 (map-get? token-balances {owner: owner, token-id: token-id}))
 )
 
+;; @desc Validate batch size
+(define-private (validate-batch-size (size uint))
+    (asserts! (<= size MAX-BATCH-SIZE) ERR-ARRAY-LENGTH-MISMATCH)
+)
+
 ;; @desc Get multiple balances efficiently in a single call
 ;; @param owners: List of principals to query
 ;; @param token-ids: List of token IDs to query (must match owners length)
@@ -53,6 +71,7 @@
           (token-ids-length (len token-ids)))
         ;; Ensure arrays have same length
         (asserts! (is-eq owners-length token-ids-length) ERR-ARRAY-LENGTH-MISMATCH)
+        (try! (validate-batch-size owners-length))
         
         ;; Map over the pairs and get balances
         (ok (map get-balance-pair (zip owners token-ids)))
@@ -88,10 +107,28 @@
     (default-to u0 (map-get? token-supplies token-id))
 )
 
+;; @desc Get contract version
+;; @returns: The contract version string
+(define-read-only (get-contract-version)
+    (var-get contract-version)
+)
+
 ;; @desc Get the contract owner
 ;; @returns: The principal that owns this contract
 (define-read-only (get-contract-owner)
     (var-get contract-owner)
+)
+
+;; @desc Get deployment time
+;; @returns: Block height when contract was deployed
+(define-read-only (get-deployment-time)
+    (var-get deployment-time)
+)
+
+;; @desc Get total tokens created
+;; @returns: Total number of token types created
+(define-read-only (get-total-tokens-created)
+    (var-get total-tokens-created)
 )
 
 ;; @desc Get the next token ID that will be assigned
@@ -124,7 +161,7 @@
 (define-public (set-approval-for-all (operator principal) (approved bool))
     (begin
         ;; Check if contract is paused
-        (asserts! (not (var-get contract-paused)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         
         ;; Cannot approve yourself
         (asserts! (not (is-eq tx-sender operator)) ERR-INVALID-PRINCIPAL)
@@ -169,7 +206,7 @@
 (define-public (transfer-single (from principal) (to principal) (token-id uint) (amount uint))
     (let ((sender-balance (get-balance from token-id)))
         ;; Check if contract is paused
-        (asserts! (not (var-get contract-paused)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         
         ;; Input validation
         (asserts! (> amount u0) ERR-ZERO-AMOUNT)
@@ -320,7 +357,7 @@
     (let ((token-ids-length (len token-ids))
           (amounts-length (len amounts)))
         ;; Check if contract is paused
-        (asserts! (not (var-get contract-paused)) ERR-UNAUTHORIZED)
+        (asserts! (not (var-get contract-paused)) ERR-CONTRACT-PAUSED)
         
         ;; Input validation
         (asserts! (is-eq token-ids-length amounts-length) ERR-ARRAY-LENGTH-MISMATCH)
@@ -472,11 +509,16 @@
 
 ;; Utility Functions
 
-;; @desc Check if a token has any circulating supply
+;; @desc Check if token has supply
 ;; @param token-id: The token ID to check
 ;; @returns: True if token has supply > 0
 (define-read-only (has-supply (token-id uint))
     (> (get-total-supply token-id) u0)
+)
+
+;; @desc Check if token is active (exists and has supply)
+(define-read-only (is-token-active (token-id uint))
+    (and (token-exists token-id) (has-supply token-id))
 )
 
 ;; @desc Get multiple token supplies in one call
