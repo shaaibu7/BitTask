@@ -27,6 +27,9 @@
 ;; Contract deployment timestamp
 (define-data-var deployment-time uint stacks-block-height)
 
+;; Total tokens created counter
+(define-data-var total-tokens-created uint u0)
+
 ;; Data Maps
 
 ;; Token balances: (owner, token-id) -> balance
