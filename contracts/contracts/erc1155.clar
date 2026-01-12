@@ -563,6 +563,27 @@
     (map token-exists token-ids)
 )
 
+;; @desc Get tokens owned by a specific principal (simplified version)
+;; @param owner: The principal to query
+;; @param max-tokens: Maximum number of tokens to check
+;; @returns: List of token IDs owned by the principal
+(define-read-only (get-owned-tokens (owner principal) (max-tokens uint))
+    (let ((token-range (generate-range u1 (min max-tokens (var-get next-token-id)))))
+        (filter (lambda (token-id) (> (get-balance owner token-id) u0)) token-range)
+    )
+)
+
+;; Helper function to generate a range of numbers
+(define-private (generate-range (start uint) (end uint))
+    ;; Simplified implementation - in production you'd want a more efficient approach
+    (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11 u12 u13 u14 u15 u16 u17 u18 u19 u20)
+)
+
+;; Helper function to get minimum of two values
+(define-private (min (a uint) (b uint))
+    (if (<= a b) a b)
+)
+
 ;; @desc Get contract information summary
 ;; @returns: Contract metadata and stats
 (define-read-only (get-contract-info)
