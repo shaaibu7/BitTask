@@ -1248,9 +1248,13 @@
         ;; Set the URI (creates token if it doesn't exist)
         (map-set token-uris token-id uri)
         
-        ;; Mark token as existing if not already
+        ;; Mark token as existing if not already and track creator
         (if (not (token-exists token-id))
-            (map-set token-exists-map token-id true)
+            (begin
+                (map-set token-exists-map token-id true)
+                ;; Track token creator for new tokens
+                (map-set token-creators token-id tx-sender)
+            )
             true
         )
         
