@@ -10,7 +10,7 @@ describe('create-task', () => {
     it('should create a task with valid parameters', () => {
         const amount = 1000;
         const deadline = simnet.blockHeight + 50;
-        
+
         const { result } = simnet.callPublicFn(
             'bittask',
             'create-task',
@@ -22,7 +22,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -195,7 +195,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeErr(Cl.uint(100)); // ERR-ZERO-AMOUNT
     });
 
@@ -212,7 +212,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         const pastDeadline = simnet.blockHeight - 1;
         const { result } = simnet.callPublicFn(
             'bittask',
@@ -225,7 +225,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeErr(Cl.uint(103)); // ERR-PAST-DEADLINE
     });
 
@@ -241,7 +241,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeErr(Cl.uint(103)); // ERR-PAST-DEADLINE
     });
 
@@ -257,7 +257,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeErr(Cl.uint(104)); // ERR-EMPTY-TITLE
     });
 
@@ -273,7 +273,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeErr(Cl.uint(105)); // ERR-EMPTY-DESCRIPTION
     });
 
@@ -290,7 +290,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -307,7 +307,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -324,7 +324,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -341,7 +341,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -358,7 +358,7 @@ describe('create-task', () => {
             ],
             wallet1
         );
-        
+
         expect(result).toBeOk(Cl.uint(1));
     });
 
@@ -420,5 +420,25 @@ describe('create-task', () => {
             wallet2
         );
         expect(result2.result).toBeOk(Cl.uint(2));
+    });
+
+    it('should fail if sender has insufficient funds', () => {
+        // Create a new account with 0 balance
+        const poorWallet = "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5";
+
+        const { result } = simnet.callPublicFn(
+            'bittask',
+            'create-task',
+            [
+                Cl.stringAscii("Poor Task"),
+                Cl.stringAscii("Description"),
+                Cl.uint(1000),
+                Cl.uint(simnet.blockHeight + 50)
+            ],
+            poorWallet
+        );
+
+        // Should fail with standard transfer error (u1)
+        expect(result).toBeErr(Cl.uint(1));
     });
 });
