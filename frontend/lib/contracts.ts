@@ -93,9 +93,46 @@ export async function fetchTasks(): Promise<Task[]> {
                 };
             });
 
+
         return tasks.reverse();
     } catch (e) {
         console.error("Error fetching tasks", e);
         return [];
+    }
+}
+
+export async function fetchTask(id: number): Promise<Task | null> {
+    try {
+        const result = await fetchCallReadOnlyFunction({
+            contractAddress: CONTRACT_ADDRESS,
+            contractName: CONTRACT_NAME,
+            functionName: 'get-task',
+            functionArgs: [uintCV(id)],
+            senderAddress: CONTRACT_ADDRESS,
+            network,
+        });
+
+        const t = cvToValue(result);
+        if (!t) return null;
+
+        // Check if it's wrapped in 'value' (for response/optional types)
+        const taskData = t.value || t;
+
+        // Double check structure if it's a tuple inside response
+        if (!taskData.title) return null;
+
+        return {
+            id: id,
+            title: taskData.title.value || taskData.title,
+            description: taskData.description.value || taskData.description,
+            creator: taskData.creator.value || taskData.creator,
+            worker: (taskData.worker && taskData.worker.value) ? taskData.worker.value : (taskData.worker || null),
+            amount: Number(taskData.amount.value || taskData.amount),
+            deadline: Number(taskData.deadline.value || taskData.deadline),
+            status: taskData.status.value || taskData.status
+        };
+    } catch (e) {
+        console.error(`Error fetching task ${id}`, e);
+        return null;
     }
 }
