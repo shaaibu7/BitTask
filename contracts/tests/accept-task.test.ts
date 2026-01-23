@@ -373,4 +373,41 @@ describe('accept-task', () => {
         );
         expect(task3.result).toBeTruthy();
     });
+
+    it('should fail when accepting a reclaimed (completed) task', () => {
+        const deadline = simnet.blockHeight + 10;
+
+        simnet.callPublicFn(
+            'bittask',
+            'create-task',
+            [
+                Cl.stringAscii("To be Reclaimed"),
+                Cl.stringAscii("Desc"),
+                Cl.uint(1000),
+                Cl.uint(deadline)
+            ],
+            wallet1
+        );
+
+        // Advance chain to pass deadline
+        simnet.mineEmptyBlocks(15);
+
+        // Reclaim
+        simnet.callPublicFn(
+            'bittask',
+            'reclaim-expired',
+            [Cl.uint(1)],
+            wallet1
+        );
+
+        // Try to accept
+        const { result } = simnet.callPublicFn(
+            'bittask',
+            'accept-task',
+            [Cl.uint(1)],
+            wallet2
+        );
+
+        expect(result).toBeErr(Cl.uint(107)); // ERR-NOT-OPEN
+    });
 });
