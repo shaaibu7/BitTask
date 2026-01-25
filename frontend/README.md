@@ -1,46 +1,50 @@
-
 # BitTask Frontend
 
-A Next.js 16 application for interacting with the BitTask marketplace on the Stacks blockchain.
+The frontend is a Next.js application built with Tailwind CSS and Wagmi/Stacks.js for blockchain interaction.
 
 ## Getting Started
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+### Prerequisites
 
-2. Run the development server:
-   ```bash
-   npm run dev
-   ```
+- Node.js 18+
+- npm or yarn
 
-3. Open [http://localhost:3000](http://localhost:3000) with your browser.
+### Installation
+
+1.  Navigate to the directory:
+    ```bash
+    cd frontend
+    ```
+
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+
+3.  Set up environment variables:
+    ```bash
+    cp .env.sample .env.local
+    ```
+    Edit `.env.local` to match your network configuration (default is `testnet`).
+
+### Running Locally
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## Project Structure
 
 - `app/`: Next.js App Router pages and layouts.
-- `components/`: React components.
-  - `ui/`: Generic reusable UI components (Button, Card, Input, etc.).
-  - `layout/`: Layout components (Header, Footer).
-- `hooks/`: Custom React hooks (use-task, use-wallet).
-- `lib/`: Utility functions and contract interactions.
+- `components/`: Reusable React components.
+  - `ui/`: Generic UI components (Buttons, Inputs, etc.).
+  - `layout/`: specific layout components (Header, Footer).
+- `lib/`: Utility functions and contract interaction logic.
+- `hooks/`: Custom React hooks.
 
-## Key Components
+## Troubleshooting
 
-- **Header**: Manages wallet connection state using `use-wallet`.
-- **TaskList**: Displays a grid of tasks with loading and empty states.
-- **TaskCard**: Individual task summary card.
-- **TaskDetailsPage**: Detailed view of a task with interaction buttons.
-
-## Environment Variables
-
-Copy `.env.sample` to `.env.local` and configure:
-- `NEXT_PUBLIC_STACKS_NETWORK`: 'testnet' or 'mainnet'
-
-## Tech Stack
-
-- **Framework**: Next.js 16
-- **Styling**: Tailwind CSS 4
-- **Blockchain**: Stacks.js
-- **Icons**: Lucide React
+- **Wagmi Error**: If you encounter issues with Wagmi provider, ensure you are wrapping the app correctly in `Providers.tsx`.
+- **Hydration Errors**: Ensure that UI that depends on wallet state handles loading states gracefully.
