@@ -1,28 +1,37 @@
-
 # Contributing to BitTask
 
-Thank you for your interest in contributing to BitTask!
+We welcome contributions to BitTask! Please follow these guidelines to ensure a smooth collaboration process.
 
-## Code of Conduct
+## Development Process
 
-Please help us keep the community open and inclusive. Be respectful and constructive in all interactions.
+1.  **Fork** the repository.
+2.  **Clone** your fork locally.
+3.  Create a new **branch** for your feature or fix: `git checkout -b feature/my-feature`.
+4.  Commit your changes with clear messages.
+5.  Push to your fork and submit a **Pull Request**.
 
-## How to Contribute
+## Code Style
 
-1. **Fork the Repository**: Click the "Fork" button on GitHub.
-2. **Clone your Fork**: `git clone https://github.com/YOUR_USERNAME/BitTask.git`
-3. **Create a Branch**: `git checkout -b feature/amazing-feature`
-4. **Make Changes**: Implement your feature or fix.
-5. **Test**: Run `npm test` in the `contracts` directory to ensure smart contracts are valid.
-6. **Commit**: Use descriptive commit messages (e.g., `feat: add new task filter`).
-7. **Push**: `git push origin feature/amazing-feature`
-8. **Open a Pull Request**: Submit your PR on the main repository.
+### General
 
-## Development Workflow
+- Use meaningful variable and function names.
+- Keep functions small and focused.
 
-- **Smart Contracts**: Located in `contracts/`. Use Clarinet for local development.
-- **Frontend**: Located in `frontend/`. Built with Next.js.
+### Frontend
 
-## Reporting Issues
+- We use **Prettier** for code formatting. Run `npm run format` before committing.
+- We use **ESLint** for linting. Run `npm run lint` to catch errors.
+- Use TypeScript for all new code. Avoid `any` types where possible.
+- Use Tailwind CSS for styling.
 
-If you find a bug or have a suggestion, please open an issue in the GitHub repository.
+### Smart Contracts
+
+- Follow standard Clarity conventions.
+- Ensure all public functions have appropriate checks and error handling.
+- Write tests for every new public function.
+
+## Pull Request Process
+
+1.  Ensure all tests pass.
+2.  Update documentation if you changed any functionality.
+3.  Describe your changes in detail in the PR description.
