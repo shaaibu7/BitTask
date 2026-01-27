@@ -380,6 +380,121 @@
     )
 )
 
+;; @desc Assign arbitrator to a dispute
+;; @param dispute-id uint - Dispute ID
+;; @param arbitrator principal - Arbitrator to assign
+(define-public (assign-arbitrator 
+        (dispute-id uint)
+        (arbitrator principal)
+    )
+    (let ((dispute (unwrap! (map-get? Disputes dispute-id) ERR-DISPUTE-NOT-FOUND)))
+        ;; Only contract owner can assign arbitrators
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        
+        ;; Check dispute is not already resolved
+        (asserts! (is-none (get resolved-at dispute)) ERR-DISPUTE-ALREADY-RESOLVED)
+        
+        ;; Check arbitrator is active
+        (let ((arb-data (unwrap! (map-get? Arbitrators arbitrator) ERR-NOT-ARBITRATOR)))
+            (asserts! (get active arb-data) ERR-NOT-ARBITRATOR)
+            
+            ;; Update dispute with arbitrator
+            (map-set Disputes dispute-id
+                (merge dispute {
+                    arbitrator: (some arbitrator)
+                })
+            )
+            
+            ;; Emit event
+            (print {
+                event: "arbitrator-assigned",
+                dispute-id: dispute-id,
+                arbitrator: arbitrator
+            })
+            
+            (ok true)
+        )
+    )
+)
+
+;; @desc Resolve dispute with arbitrator decision
+;; @param dispute-id uint - Dispute ID
+;; @param winner (string-ascii 10) - "creator" or "worker"
+;; @param resolution (string-ascii 256) - Resolution explanation
+(define-public (resolve-dispute 
+        (dispute-id uint)
+        (winner (string-ascii 10))
+        (resolution (string-ascii 256))
+    )
+    (let (
+        (dispute (unwrap! (map-get? Disputes dispute-id) ERR-DISPUTE-NOT-FOUND))
+        (task (unwrap! (map-get? Tasks (get task-id dispute)) ERR-INVALID-ID))
+    )
+        ;; Check caller is assigned arbitrator
+        (asserts! (is-eq (some tx-sender) (get arbitrator dispute)) ERR-NOT-ARBITRATOR)
+        
+        ;; Check dispute is not already resolved
+        (asserts! (is-none (get resolved-at dispute)) ERR-DISPUTE-ALREADY-RESOLVED)
+        
+        ;; Validate winner decision
+        (asserts! (or 
+            (is-eq winner "creator")
+            (is-eq winner "worker")
+        ) ERR-INVALID-DISPUTE-DECISION)
+        
+        ;; Determine fund recipient based on decision
+        (let (
+            (recipient (if (is-eq winner "creator")
+                (get creator task)
+                (unwrap! (get worker task) ERR-NOT-WORKER)
+            ))
+            (task-amount (get amount task))
+        )
+            ;; Update dispute record
+            (map-set Disputes dispute-id
+                (merge dispute {
+                    resolution: (some resolution),
+                    resolved-at: (some stacks-block-height),
+                    winner: (some (if (is-eq winner "creator") (get creator task) (unwrap-panic (get worker task))))
+                })
+            )
+            
+            ;; Update task status
+            (map-set Tasks (get task-id dispute)
+                (merge task {
+                    status: "completed"
+                })
+            )
+            
+            ;; Transfer funds to winner
+            (try! (as-contract (stx-transfer? task-amount tx-sender recipient)))
+            
+            ;; Update arbitrator statistics
+            (let ((arb-data (unwrap-panic (map-get? Arbitrators tx-sender))))
+                (map-set Arbitrators tx-sender
+                    (merge arb-data {
+                        total-cases: (+ (get total-cases arb-data) u1)
+                    })
+                )
+            )
+            
+            ;; Emit event
+            (print {
+                event: "dispute-resolved",
+                dispute-id: dispute-id,
+                task-id: (get task-id dispute),
+                winner: winner,
+                recipient: recipient,
+                amount: task-amount,
+                arbitrator: tx-sender,
+                resolution: resolution
+            })
+            
+            (ok true)
+        )
+    )
+)
+
 ;; @desc Accept a task
 ;; @param id uint - Task ID
 (define-public (accept-task (id uint))
