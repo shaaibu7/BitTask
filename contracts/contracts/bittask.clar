@@ -30,6 +30,15 @@
 (define-constant ERR-INVALID-CATEGORY (err u120)) ;; Category does not exist
 (define-constant ERR-CATEGORY-INACTIVE (err u121)) ;; Category is not active
 
+;; Dispute error constants
+(define-constant ERR-DISPUTE-EXISTS (err u200)) ;; Task already has an active dispute
+(define-constant ERR-DISPUTE-NOT-FOUND (err u201)) ;; Dispute ID not found
+(define-constant ERR-NOT-DISPUTE-PARTICIPANT (err u202)) ;; Caller not creator or worker
+(define-constant ERR-NOT-ARBITRATOR (err u203)) ;; Caller is not assigned arbitrator
+(define-constant ERR-DISPUTE-ALREADY-RESOLVED (err u204)) ;; Dispute already resolved
+(define-constant ERR-INSUFFICIENT-DISPUTE-FEE (err u205)) ;; Insufficient fee for dispute
+(define-constant ERR-INVALID-DISPUTE-DECISION (err u206)) ;; Invalid arbitrator decision
+
 ;; Validation constants
 (define-constant MIN-TITLE-LENGTH u5)
 (define-constant MAX-TITLE-LENGTH u100)
@@ -39,8 +48,14 @@
 (define-constant MAX-AMOUNT u100000000) ;; 100 STX maximum
 (define-constant MIN-DEADLINE-BLOCKS u144) ;; 24 hours minimum (assuming 10 min blocks)
 
+;; Dispute constants
+(define-constant DISPUTE-FEE-PERCENTAGE u5) ;; 5% of task amount as dispute fee
+(define-constant MIN-DISPUTE-FEE u50000) ;; Minimum 0.05 STX dispute fee
+
 ;; Data Variables
 (define-data-var task-nonce uint u0) ;; Global counter for task IDs
+(define-data-var dispute-nonce uint u0) ;; Global counter for dispute IDs
+(define-data-var contract-owner principal tx-sender) ;; Contract owner for arbitrator management
 
 ;; Data Maps
 ;; Category storage for task classification
@@ -51,6 +66,32 @@
         description: (string-ascii 200),
         task-count: uint,
         active: bool
+    }
+)
+
+;; Dispute storage for conflict resolution
+(define-map Disputes
+    uint ;; Dispute ID
+    {
+        task-id: uint,
+        initiator: principal,
+        reason: (string-ascii 256),
+        arbitrator: (optional principal),
+        resolution: (optional (string-ascii 256)),
+        created-at: uint,
+        resolved-at: (optional uint),
+        winner: (optional principal), ;; "creator" or "worker"
+        fee-paid: uint
+    }
+)
+
+;; Arbitrator registry
+(define-map Arbitrators
+    principal
+    {
+        active: bool,
+        total-cases: uint,
+        reputation-score: uint
     }
 )
 
@@ -68,6 +109,7 @@
         submission: (optional (string-ascii 500)), ;; Extended for multiple links
         created-at: uint,
         category: (string-ascii 30),         ; New field for categorization
+        dispute-id: (optional uint),         ; New field for dispute tracking
     }
 )
 
@@ -214,6 +256,7 @@
             submission: none,
             created-at: stacks-block-height,
             category: category,
+            dispute-id: none,
         })
 
         ;; Update category statistics
@@ -233,6 +276,107 @@
         })
 
         (ok task-id)
+    )
+)
+
+;; @desc Add or update arbitrator
+;; @param arbitrator principal - Arbitrator to add
+(define-public (add-arbitrator (arbitrator principal))
+    (begin
+        ;; Only contract owner can add arbitrators
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        
+        (map-set Arbitrators arbitrator {
+            active: true,
+            total-cases: u0,
+            reputation-score: u100 ;; Start with 100 reputation
+        })
+        
+        (print {
+            event: "arbitrator-added",
+            arbitrator: arbitrator
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Calculate dispute fee based on task amount
+;; @param task-amount uint - Amount of the task
+(define-private (calculate-dispute-fee (task-amount uint))
+    (let ((percentage-fee (/ (* task-amount DISPUTE-FEE-PERCENTAGE) u100)))
+        (if (>= percentage-fee MIN-DISPUTE-FEE)
+            percentage-fee
+            MIN-DISPUTE-FEE
+        )
+    )
+)
+
+;; @desc Initiate a dispute for a task
+;; @param task-id uint - Task ID to dispute
+;; @param reason (string-ascii 256) - Reason for dispute
+(define-public (initiate-dispute 
+        (task-id uint)
+        (reason (string-ascii 256))
+    )
+    (let (
+        (task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID))
+        (dispute-id (+ (var-get dispute-nonce) u1))
+        (dispute-fee (calculate-dispute-fee (get amount task)))
+    )
+        ;; Check task doesn't already have a dispute
+        (asserts! (is-none (get dispute-id task)) ERR-DISPUTE-EXISTS)
+        
+        ;; Check caller is creator or worker
+        (asserts! (or 
+            (is-eq tx-sender (get creator task))
+            (is-eq (some tx-sender) (get worker task))
+        ) ERR-NOT-DISPUTE-PARTICIPANT)
+        
+        ;; Check task is in valid state for dispute (in-progress or submitted)
+        (asserts! (or 
+            (is-eq (get status task) "in-progress")
+            (is-eq (get status task) "submitted")
+        ) ERR-NOT-IN-PROGRESS)
+        
+        ;; Charge dispute fee
+        (try! (stx-transfer? dispute-fee tx-sender (as-contract tx-sender)))
+        
+        ;; Create dispute record
+        (map-set Disputes dispute-id {
+            task-id: task-id,
+            initiator: tx-sender,
+            reason: reason,
+            arbitrator: none,
+            resolution: none,
+            created-at: stacks-block-height,
+            resolved-at: none,
+            winner: none,
+            fee-paid: dispute-fee
+        })
+        
+        ;; Update task status and link dispute
+        (map-set Tasks task-id
+            (merge task {
+                status: "disputed",
+                dispute-id: (some dispute-id)
+            })
+        )
+        
+        ;; Increment dispute nonce
+        (var-set dispute-nonce dispute-id)
+        
+        ;; Emit event
+        (print {
+            event: "dispute-initiated",
+            task-id: task-id,
+            dispute-id: dispute-id,
+            initiator: tx-sender,
+            reason: reason,
+            fee-paid: dispute-fee
+        })
+        
+        (ok dispute-id)
     )
 )
 
@@ -450,19 +594,19 @@
     (filter is-task-in-category (map get-task task-ids))
 )
 
-;; @desc Helper function to check if task belongs to category
-;; @param task-opt (optional task) - Task to check
-(define-private (is-task-in-category (task-opt (optional {
-        title: (string-ascii 100),
-        description: (string-ascii 500),
-        creator: principal,
-        worker: (optional principal),
-        amount: uint,
-        deadline: uint,
-        status: (string-ascii 20),
-        submission: (optional (string-ascii 500)),
-        created-at: uint,
-        category: (string-ascii 30)
-    })))
-    (is-some task-opt)
+;; @desc Get dispute information
+;; @param dispute-id uint - Dispute ID
+(define-read-only (get-dispute (dispute-id uint))
+    (map-get? Disputes dispute-id)
+)
+
+;; @desc Get arbitrator information
+;; @param arbitrator principal - Arbitrator principal
+(define-read-only (get-arbitrator (arbitrator principal))
+    (map-get? Arbitrators arbitrator)
+)
+
+;; @desc Get dispute nonce
+(define-read-only (get-dispute-nonce)
+    (var-get dispute-nonce)
 )
