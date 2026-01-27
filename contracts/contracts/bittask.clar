@@ -2097,3 +2097,119 @@
         })
     )
 )
+
+;; @desc Get comprehensive user profile with all related data
+;; @param user principal - User to get profile for
+(define-read-only (get-user-profile (user principal))
+    (let (
+        (reputation (map-get? UserReputation user))
+        (trust-score (calculate-trust-score user))
+    )
+        (ok {
+            user: user,
+            reputation: reputation,
+            trust-score: trust-score,
+            is-arbitrator: (is-some (map-get? Arbitrators user)),
+            arbitrator-data: (map-get? Arbitrators user)
+        })
+    )
+)
+
+;; @desc Get tasks by user (as creator or worker)
+;; @param user principal - User to get tasks for
+;; @param start-id uint - Starting task ID
+;; @param limit uint - Maximum tasks to return
+(define-read-only (get-user-tasks 
+        (user principal)
+        (start-id uint)
+        (limit uint)
+    )
+    (let ((tasks (get-tasks-paginated start-id limit)))
+        (filter (check-user-involvement user) tasks)
+    )
+)
+
+;; @desc Helper to check if user is involved in task
+(define-private (check-user-involvement (user principal) (task-opt (optional {
+        title: (string-ascii 100),
+        description: (string-ascii 500),
+        creator: principal,
+        worker: (optional principal),
+        amount: uint,
+        deadline: uint,
+        status: (string-ascii 20),
+        submission: (optional (string-ascii 500)),
+        created-at: uint,
+        category: (string-ascii 30),
+        dispute-id: (optional uint),
+        rating: (optional uint),
+        milestone-count: uint,
+        escrow-remaining: uint,
+        revision-count: uint,
+        submission-count: uint
+    })))
+    (match task-opt
+        task (or 
+            (is-eq (get creator task) user)
+            (is-eq (get worker task) (some user))
+        )
+        false
+    )
+)
+
+;; @desc Get category statistics with task distribution
+(define-read-only (get-category-analytics)
+    (ok {
+        development: (map-get? Categories "development"),
+        design: (map-get? Categories "design"),
+        writing: (map-get? Categories "writing"),
+        marketing: (map-get? Categories "marketing"),
+        research: (map-get? Categories "research")
+    })
+)
+
+;; @desc Validate data completeness for a task
+;; @param task-id uint - Task ID to validate
+(define-read-only (validate-task-completeness (task-id uint))
+    (let ((task (unwrap! (map-get? Tasks task-id) (err "Task not found"))))
+        (ok {
+            has-title: (> (len (get title task)) u0),
+            has-description: (> (len (get description task)) u0),
+            has-category: (> (len (get category task)) u0),
+            has-valid-amount: (> (get amount task) u0),
+            has-future-deadline: (> (get deadline task) stacks-block-height),
+            has-creator: true,
+            completeness-score: (calculate-completeness-score task)
+        })
+    )
+)
+
+;; @desc Calculate completeness score for a task
+(define-private (calculate-completeness-score (task {
+        title: (string-ascii 100),
+        description: (string-ascii 500),
+        creator: principal,
+        worker: (optional principal),
+        amount: uint,
+        deadline: uint,
+        status: (string-ascii 20),
+        submission: (optional (string-ascii 500)),
+        created-at: uint,
+        category: (string-ascii 30),
+        dispute-id: (optional uint),
+        rating: (optional uint),
+        milestone-count: uint,
+        escrow-remaining: uint,
+        revision-count: uint,
+        submission-count: uint
+    }))
+    (let (
+        (title-score (if (>= (len (get title task)) u10) u20 u10))
+        (desc-score (if (>= (len (get description task)) u50) u20 u10))
+        (category-score (if (> (len (get category task)) u0) u20 u0))
+        (amount-score (if (>= (get amount task) u1000) u20 u10))
+        (deadline-score (if (> (get deadline task) stacks-block-height) u20 u0))
+    )
+        (+ title-score desc-score category-score amount-score deadline-score)
+    )
+)
