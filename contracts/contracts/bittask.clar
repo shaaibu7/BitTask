@@ -17,6 +17,24 @@
 (define-constant ERR-NOT-CREATOR (err u111)) ;; Caller is not the task creator
 (define-constant ERR-ALREADY-COMPLETED (err u112)) ;; Task is already completed
 
+;; Enhanced validation error constants
+(define-constant ERR-TITLE-TOO-SHORT (err u113)) ;; Title must be at least 5 characters
+(define-constant ERR-TITLE-TOO-LONG (err u114)) ;; Title must be at most 100 characters
+(define-constant ERR-DESCRIPTION-TOO-SHORT (err u115)) ;; Description must be at least 20 characters
+(define-constant ERR-DESCRIPTION-TOO-LONG (err u116)) ;; Description must be at most 500 characters
+(define-constant ERR-AMOUNT-TOO-LOW (err u117)) ;; Amount below minimum limit
+(define-constant ERR-AMOUNT-TOO-HIGH (err u118)) ;; Amount above maximum limit
+(define-constant ERR-DEADLINE-TOO-SOON (err u119)) ;; Deadline must be at least 24 hours in future
+
+;; Validation constants
+(define-constant MIN-TITLE-LENGTH u5)
+(define-constant MAX-TITLE-LENGTH u100)
+(define-constant MIN-DESCRIPTION-LENGTH u20)
+(define-constant MAX-DESCRIPTION-LENGTH u500)
+(define-constant MIN-AMOUNT u1000) ;; 1000 micro-STX minimum
+(define-constant MAX-AMOUNT u100000000) ;; 100 STX maximum
+(define-constant MIN-DEADLINE-BLOCKS u144) ;; 24 hours minimum (assuming 10 min blocks)
+
 ;; Data Variables
 (define-data-var task-nonce uint u0) ;; Global counter for task IDs
 
@@ -25,43 +43,75 @@
 (define-map Tasks
     uint ;; Task ID
     {
-        title: (string-ascii 50),
-        description: (string-ascii 256),
+        title: (string-ascii 100),           ; Extended from 50
+        description: (string-ascii 500),     ; Extended from 256
         creator: principal,
         worker: (optional principal),
         amount: uint,
         deadline: uint,
         status: (string-ascii 20), ;; "open", "in-progress", "submitted", "completed", "disputed"
-        submission: (optional (string-ascii 256)), ;; Proof of work link/hash
+        submission: (optional (string-ascii 500)), ;; Extended for multiple links
         created-at: uint,
     }
+)
+
+;; Enhanced validation functions
+
+;; @desc Validate task creation parameters
+;; @param title (string-ascii 100) - Task title
+;; @param description (string-ascii 500) - Task description  
+;; @param amount uint - Task amount
+;; @param deadline uint - Task deadline
+(define-private (validate-task-creation
+        (title (string-ascii 100))
+        (description (string-ascii 500))
+        (amount uint)
+        (deadline uint)
+    )
+    (begin
+        ;; Validate title length
+        (asserts! (>= (len title) MIN-TITLE-LENGTH) ERR-TITLE-TOO-SHORT)
+        (asserts! (<= (len title) MAX-TITLE-LENGTH) ERR-TITLE-TOO-LONG)
+        
+        ;; Validate description length
+        (asserts! (>= (len description) MIN-DESCRIPTION-LENGTH) ERR-DESCRIPTION-TOO-SHORT)
+        (asserts! (<= (len description) MAX-DESCRIPTION-LENGTH) ERR-DESCRIPTION-TOO-LONG)
+        
+        ;; Validate amount limits
+        (asserts! (>= amount MIN-AMOUNT) ERR-AMOUNT-TOO-LOW)
+        (asserts! (<= amount MAX-AMOUNT) ERR-AMOUNT-TOO-HIGH)
+        
+        ;; Validate deadline (must be at least 24 hours in future)
+        (asserts! (>= deadline (+ stacks-block-height MIN-DEADLINE-BLOCKS)) ERR-DEADLINE-TOO-SOON)
+        
+        (ok true)
+    )
+)
+
+;; @desc Check if string contains only valid characters (alphanumeric, spaces, hyphens)
+;; @param input (string-ascii 500) - String to validate
+(define-private (validate-string-chars (input (string-ascii 500)))
+    ;; For now, we'll accept all ASCII characters as Clarity doesn't have regex
+    ;; In production, this could be enhanced with character-by-character validation
+    (ok true)
 )
 
 ;; Public Functions
 
 ;; @desc Create a new task with details and reward amount
-;; @param title (string-ascii 50) - Title of the task
-;; @param description (string-ascii 256) - Short description
+;; @param title (string-ascii 100) - Title of the task (extended from 50)
+;; @param description (string-ascii 500) - Description (extended from 256)
 ;; @param amount uint - Reward amount in micro-STX
 ;; @param deadline uint - Block height by which task must be completed
 (define-public (create-task
-        (title (string-ascii 50))
-        (description (string-ascii 256))
+        (title (string-ascii 100))
+        (description (string-ascii 500))
         (amount uint)
         (deadline uint)
     )
     (let ((task-id (+ (var-get task-nonce) u1)))
-        ;; Check title is not empty
-        (asserts! (> (len title) u0) ERR-EMPTY-TITLE)
-
-        ;; Check description is not empty
-        (asserts! (> (len description) u0) ERR-EMPTY-DESCRIPTION)
-
-        ;; Check amount is positive
-        (asserts! (> amount u0) ERR-ZERO-AMOUNT)
-
-        ;; Check deadline is in future
-        (asserts! (> deadline stacks-block-height) ERR-PAST-DEADLINE)
+        ;; Enhanced validation using new validation function
+        (try! (validate-task-creation title description amount deadline))
 
         ;; Transfer STX from creator to contract
         (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
@@ -128,10 +178,10 @@
 
 ;; @desc Submit work for a task
 ;; @param id uint - Task ID
-;; @param submission (string-ascii 256) - Link or hash of the work
+;; @param submission (string-ascii 500) - Link or hash of the work (extended from 256)
 (define-public (submit-work
         (id uint)
-        (submission (string-ascii 256))
+        (submission (string-ascii 500))
     )
     (let ((task (unwrap! (map-get? Tasks id) ERR-INVALID-ID)))
         ;; Check status is in-progress
