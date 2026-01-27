@@ -58,6 +58,12 @@
 (define-constant ERR-REVISION-LIMIT_EXCEEDED (err u600)) ;; Too many revisions requested
 (define-constant ERR-INVALID-SUBMISSION_FORMAT (err u601)) ;; Invalid submission format
 
+;; Emergency and recovery error constants
+(define-constant ERR-CONTRACT-PAUSED (err u700)) ;; Contract is paused
+(define-constant ERR-NOT-EMERGENCY_ADMIN (err u701)) ;; Not authorized for emergency actions
+(define-constant ERR-RECOVERY-NOT_AVAILABLE (err u702)) ;; Recovery not available for this task
+(define-constant ERR-RECOVERY-TIMELOCK_ACTIVE (err u703)) ;; Recovery timelock still active
+
 ;; Validation constants
 (define-constant MIN-TITLE-LENGTH u5)
 (define-constant MAX-TITLE-LENGTH u100)
@@ -75,10 +81,17 @@
 (define-constant MAX-REVISIONS u3) ;; Maximum number of revisions allowed
 (define-constant REVISION-DEADLINE-EXTENSION u72) ;; 12 hours extension per revision
 
+;; Emergency and recovery constants
+(define-constant RECOVERY-TIMELOCK-BLOCKS u1008) ;; 7 days timelock for recovery
+(define-constant EMERGENCY-PAUSE-DURATION u144) ;; 24 hours maximum pause duration
+
 ;; Data Variables
 (define-data-var task-nonce uint u0) ;; Global counter for task IDs
 (define-data-var dispute-nonce uint u0) ;; Global counter for dispute IDs
 (define-data-var contract-owner principal tx-sender) ;; Contract owner for arbitrator management
+(define-data-var contract-paused bool false) ;; Emergency pause state
+(define-data-var pause-end-block (optional uint) none) ;; When pause expires
+(define-data-var emergency-admin (optional principal) none) ;; Emergency admin for recovery
 
 ;; Data Maps
 ;; Category storage for task classification
@@ -154,6 +167,18 @@
         submitted-at: uint,
         revision-requested: bool,
         revision-notes: (optional (string-ascii 256))
+    }
+)
+
+;; Recovery requests for stuck tasks
+(define-map RecoveryRequests
+    uint ;; Task ID
+    {
+        requester: principal,
+        reason: (string-ascii 256),
+        requested-at: uint,
+        timelock-expires: uint,
+        approved: bool
     }
 )
 
@@ -1816,4 +1841,196 @@
         rep (ok (get average-rating rep))
         (err "User not found")
     )
+)
+
+;; @desc Emergency pause contract (only owner)
+;; @param reason (string-ascii 256) - Reason for pause
+(define-public (emergency-pause (reason (string-ascii 256)))
+    (begin
+        ;; Only contract owner can pause
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        
+        ;; Set pause state
+        (var-set contract-paused true)
+        (var-set pause-end-block (some (+ stacks-block-height EMERGENCY-PAUSE-DURATION)))
+        
+        ;; Emit event
+        (print {
+            event: "emergency-pause",
+            admin: tx-sender,
+            reason: reason,
+            pause-until: (+ stacks-block-height EMERGENCY-PAUSE-DURATION)
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Unpause contract (only owner or automatic after duration)
+(define-public (unpause-contract)
+    (begin
+        ;; Check if pause has expired or owner is calling
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (match (var-get pause-end-block)
+                end-block (<= end-block stacks-block-height)
+                false
+            )
+        ) ERR-UNAUTHORIZED)
+        
+        ;; Remove pause state
+        (var-set contract-paused false)
+        (var-set pause-end-block none)
+        
+        ;; Emit event
+        (print {
+            event: "contract-unpaused",
+            admin: tx-sender,
+            unpaused-at: stacks-block-height
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Set emergency admin for recovery operations
+;; @param admin principal - Emergency admin
+(define-public (set-emergency-admin (admin principal))
+    (begin
+        ;; Only contract owner can set emergency admin
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-UNAUTHORIZED)
+        
+        (var-set emergency-admin (some admin))
+        
+        (print {
+            event: "emergency-admin-set",
+            admin: admin,
+            set-by: tx-sender
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Request recovery for a stuck task
+;; @param task-id uint - Task ID
+;; @param reason (string-ascii 256) - Reason for recovery
+(define-public (request-task-recovery
+        (task-id uint)
+        (reason (string-ascii 256))
+    )
+    (let ((task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID)))
+        ;; Check caller is creator or worker
+        (asserts! (or 
+            (is-eq tx-sender (get creator task))
+            (is-eq (some tx-sender) (get worker task))
+        ) ERR-NOT-DISPUTE-PARTICIPANT)
+        
+        ;; Check task is in a recoverable state (disputed or stuck in-progress)
+        (asserts! (or 
+            (is-eq (get status task) "disputed")
+            (and 
+                (is-eq (get status task) "in-progress")
+                (<= (get deadline task) stacks-block-height)
+            )
+        ) ERR-RECOVERY-NOT_AVAILABLE)
+        
+        ;; Create recovery request
+        (map-set RecoveryRequests task-id {
+            requester: tx-sender,
+            reason: reason,
+            requested-at: stacks-block-height,
+            timelock-expires: (+ stacks-block-height RECOVERY-TIMELOCK-BLOCKS),
+            approved: false
+        })
+        
+        ;; Emit event
+        (print {
+            event: "recovery-requested",
+            task-id: task-id,
+            requester: tx-sender,
+            reason: reason,
+            timelock-expires: (+ stacks-block-height RECOVERY-TIMELOCK-BLOCKS)
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Execute recovery for a task (after timelock)
+;; @param task-id uint - Task ID
+(define-public (execute-task-recovery (task-id uint))
+    (let (
+        (task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID))
+        (recovery (unwrap! (map-get? RecoveryRequests task-id) ERR-RECOVERY-NOT_AVAILABLE))
+    )
+        ;; Check timelock has expired
+        (asserts! (>= stacks-block-height (get timelock-expires recovery)) ERR-RECOVERY-TIMELOCK_ACTIVE)
+        
+        ;; Check caller is emergency admin or contract owner
+        (asserts! (or 
+            (is-eq tx-sender (var-get contract-owner))
+            (is-eq (some tx-sender) (var-get emergency-admin))
+        ) ERR-NOT-EMERGENCY_ADMIN)
+        
+        ;; Execute recovery based on task state
+        (if (is-eq (get status task) "disputed")
+            ;; For disputed tasks, refund to creator
+            (begin
+                (map-set Tasks task-id
+                    (merge task {
+                        status: "completed"
+                    })
+                )
+                (as-contract (stx-transfer? (get amount task) tx-sender (get creator task)))
+            )
+            ;; For stuck in-progress tasks, refund to creator
+            (begin
+                (map-set Tasks task-id
+                    (merge task {
+                        status: "completed"
+                    })
+                )
+                (as-contract (stx-transfer? (get amount task) tx-sender (get creator task)))
+            )
+        )
+        
+        ;; Mark recovery as approved
+        (map-set RecoveryRequests task-id
+            (merge recovery {
+                approved: true
+            })
+        )
+        
+        ;; Emit event
+        (print {
+            event: "recovery-executed",
+            task-id: task-id,
+            admin: tx-sender,
+            amount-refunded: (get amount task),
+            recipient: (get creator task)
+        })
+        
+        (ok true)
+    )
+)
+
+;; @desc Get contract pause status
+(define-read-only (get-pause-status)
+    (ok {
+        paused: (var-get contract-paused),
+        pause-end-block: (var-get pause-end-block),
+        current-block: stacks-block-height
+    })
+)
+
+;; @desc Get recovery request information
+;; @param task-id uint - Task ID
+(define-read-only (get-recovery-request (task-id uint))
+    (map-get? RecoveryRequests task-id)
+)
+
+;; @desc Get emergency admin
+(define-read-only (get-emergency-admin)
+    (var-get emergency-admin)
 )
