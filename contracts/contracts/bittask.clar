@@ -39,6 +39,10 @@
 (define-constant ERR-INSUFFICIENT-DISPUTE-FEE (err u205)) ;; Insufficient fee for dispute
 (define-constant ERR-INVALID-DISPUTE-DECISION (err u206)) ;; Invalid arbitrator decision
 
+;; Reputation error constants
+(define-constant ERR-USER-NOT-FOUND (err u300)) ;; User reputation not found
+(define-constant ERR-INVALID-RATING (err u301)) ;; Rating must be between 1-5
+
 ;; Validation constants
 (define-constant MIN-TITLE-LENGTH u5)
 (define-constant MAX-TITLE-LENGTH u100)
@@ -95,6 +99,20 @@
     }
 )
 
+;; User reputation tracking
+(define-map UserReputation
+    principal
+    {
+        total-tasks: uint,
+        completed-tasks: uint,
+        total-earned: uint,
+        total-spent: uint,
+        average-rating: uint, ;; Multiplied by 100 for precision (e.g., 450 = 4.5 stars)
+        dispute-count: uint,
+        last-activity: uint
+    }
+)
+
 ;; Main storage for task details
 (define-map Tasks
     uint ;; Task ID
@@ -110,6 +128,7 @@
         created-at: uint,
         category: (string-ascii 30),         ; New field for categorization
         dispute-id: (optional uint),         ; New field for dispute tracking
+        rating: (optional uint),             ; New field for task rating (1-5 stars)
     }
 )
 
@@ -257,6 +276,7 @@
             created-at: stacks-block-height,
             category: category,
             dispute-id: none,
+            rating: none,
         })
 
         ;; Update category statistics
@@ -380,6 +400,119 @@
     )
 )
 
+;; @desc Initialize or get user reputation
+;; @param user principal - User to initialize
+(define-private (ensure-user-reputation (user principal))
+    (match (map-get? UserReputation user)
+        existing-rep (ok existing-rep)
+        (begin
+            (map-set UserReputation user {
+                total-tasks: u0,
+                completed-tasks: u0,
+                total-earned: u0,
+                total-spent: u0,
+                average-rating: u0,
+                dispute-count: u0,
+                last-activity: stacks-block-height
+            })
+            (ok {
+                total-tasks: u0,
+                completed-tasks: u0,
+                total-earned: u0,
+                total-spent: u0,
+                average-rating: u0,
+                dispute-count: u0,
+                last-activity: stacks-block-height
+            })
+        )
+    )
+)
+
+;; @desc Update reputation after task completion
+;; @param creator principal - Task creator
+;; @param worker principal - Task worker
+;; @param amount uint - Task amount
+;; @param rating uint - Task rating (1-5)
+(define-private (update-reputation-on-completion
+        (creator principal)
+        (worker principal)
+        (amount uint)
+        (rating uint)
+    )
+    (begin
+        ;; Update creator reputation
+        (let ((creator-rep (try! (ensure-user-reputation creator))))
+            (map-set UserReputation creator
+                (merge creator-rep {
+                    total-tasks: (+ (get total-tasks creator-rep) u1),
+                    completed-tasks: (+ (get completed-tasks creator-rep) u1),
+                    total-spent: (+ (get total-spent creator-rep) amount),
+                    last-activity: stacks-block-height
+                })
+            )
+        )
+        
+        ;; Update worker reputation
+        (let ((worker-rep (try! (ensure-user-reputation worker))))
+            (let (
+                (new-total-tasks (+ (get total-tasks worker-rep) u1))
+                (new-completed-tasks (+ (get completed-tasks worker-rep) u1))
+                (current-avg (get average-rating worker-rep))
+                (new-avg (if (is-eq current-avg u0)
+                    (* rating u100) ;; First rating
+                    (/ (+ (* current-avg (get completed-tasks worker-rep)) (* rating u100)) new-completed-tasks)
+                ))
+            )
+                (map-set UserReputation worker
+                    (merge worker-rep {
+                        total-tasks: new-total-tasks,
+                        completed-tasks: new-completed-tasks,
+                        total-earned: (+ (get total-earned worker-rep) amount),
+                        average-rating: new-avg,
+                        last-activity: stacks-block-height
+                    })
+                )
+            )
+        )
+        
+        (ok true)
+    )
+)
+
+;; @desc Update reputation after dispute
+;; @param creator principal - Task creator
+;; @param worker principal - Task worker
+;; @param winner principal - Dispute winner
+(define-private (update-reputation-on-dispute
+        (creator principal)
+        (worker principal)
+        (winner principal)
+    )
+    (begin
+        ;; Update creator reputation
+        (let ((creator-rep (try! (ensure-user-reputation creator))))
+            (map-set UserReputation creator
+                (merge creator-rep {
+                    dispute-count: (+ (get dispute-count creator-rep) u1),
+                    last-activity: stacks-block-height
+                })
+            )
+        )
+        
+        ;; Update worker reputation
+        (let ((worker-rep (try! (ensure-user-reputation worker))))
+            (map-set UserReputation worker
+                (merge worker-rep {
+                    dispute-count: (+ (get dispute-count worker-rep) u1),
+                    last-activity: stacks-block-height
+                })
+            )
+        )
+        
+        (ok true)
+    )
+)
+
 ;; @desc Assign arbitrator to a dispute
 ;; @param dispute-id uint - Dispute ID
 ;; @param arbitrator principal - Arbitrator to assign
@@ -468,6 +601,13 @@
             
             ;; Transfer funds to winner
             (try! (as-contract (stx-transfer? task-amount tx-sender recipient)))
+            
+            ;; Update reputation for dispute
+            (try! (update-reputation-on-dispute 
+                (get creator task) 
+                (unwrap! (get worker task) ERR-NOT-WORKER)
+                recipient
+            ))
             
             ;; Update arbitrator statistics
             (let ((arb-data (unwrap-panic (map-get? Arbitrators tx-sender))))
@@ -562,27 +702,38 @@
 
 ;; @desc Approve work and release payment to worker
 ;; @param id uint - Task ID
-(define-public (approve-work (id uint))
+;; @param rating uint - Rating for the work (1-5 stars)
+(define-public (approve-work (id uint) (rating uint))
     (let ((task (unwrap! (map-get? Tasks id) ERR-INVALID-ID)))
         ;; Check that sender is the creator
         (asserts! (is-eq tx-sender (get creator task)) ERR-NOT-CREATOR)
 
         ;; Check that status is submitted
         (asserts! (is-eq (get status task) "submitted") ERR-NOT-SUBMITTED)
+        
+        ;; Validate rating
+        (asserts! (and (>= rating u1) (<= rating u5)) ERR-INVALID-RATING)
 
         ;; Get worker principal
         (let ((worker-principal (unwrap! (get worker task) ERR-NOT-WORKER)))
-            ;; Update task status before transfer to prevent re-entrancy attacks
-            ;; Following Checks-Effects-Interactions pattern: update state (Effect) before external call (Interaction)
+            ;; Update task status and rating before transfer
             (map-set Tasks id
                 (merge task {
                     status: "completed",
+                    rating: (some rating)
                 })
             )
 
             ;; Transfer STX from contract to worker
-            ;; If transfer fails, entire transaction (including state change) will be reverted
             (try! (as-contract (stx-transfer? (get amount task) tx-sender worker-principal)))
+            
+            ;; Update reputation for both parties
+            (try! (update-reputation-on-completion 
+                (get creator task) 
+                worker-principal 
+                (get amount task) 
+                rating
+            ))
 
             ;; Emit event
             (print {
@@ -591,6 +742,7 @@
                 creator: tx-sender,
                 worker: worker-principal,
                 amount: (get amount task),
+                rating: rating
             })
 
             (ok true)
@@ -724,4 +876,37 @@
 ;; @desc Get dispute nonce
 (define-read-only (get-dispute-nonce)
     (var-get dispute-nonce)
+)
+
+;; @desc Get user reputation
+;; @param user principal - User to query
+(define-read-only (get-user-reputation (user principal))
+    (map-get? UserReputation user)
+)
+
+;; @desc Calculate user trust score based on reputation
+;; @param user principal - User to calculate score for
+(define-read-only (calculate-trust-score (user principal))
+    (match (map-get? UserReputation user)
+        rep (let (
+            (completion-rate (if (> (get total-tasks rep) u0)
+                (/ (* (get completed-tasks rep) u100) (get total-tasks rep))
+                u0
+            ))
+            (rating-score (get average-rating rep))
+            (dispute-penalty (if (> (get completed-tasks rep) u0)
+                (/ (* (get dispute-count rep) u100) (get completed-tasks rep))
+                u0
+            ))
+        )
+            ;; Trust score = (completion-rate * 0.4) + (rating-score * 0.4) - (dispute-penalty * 0.2)
+            (let ((base-score (+ (/ (* completion-rate u40) u100) (/ (* rating-score u40) u100))))
+                (if (>= base-score (/ (* dispute-penalty u20) u100))
+                    (- base-score (/ (* dispute-penalty u20) u100))
+                    u0
+                )
+            )
+        )
+        u0 ;; No reputation data
+    )
 )
