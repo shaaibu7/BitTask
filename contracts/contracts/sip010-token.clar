@@ -76,3 +76,20 @@
         (ok true)
     )
 )
+;; Approve spender to spend tokens on behalf of owner
+(define-public (approve (spender principal) (amount uint))
+    (begin
+        ;; Set allowance for spender
+        (map-set allowances {owner: tx-sender, spender: spender} amount)
+        
+        ;; Emit approval event
+        (print {
+            action: "approve",
+            owner: tx-sender,
+            spender: spender,
+            amount: amount
+        })
+        
+        (ok true)
+    )
+)
