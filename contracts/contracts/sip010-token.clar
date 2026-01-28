@@ -43,3 +43,7 @@
 (define-public (get-decimals)
     (ok TOKEN-DECIMALS)
 )
+;; Get total supply
+(define-public (get-total-supply)
+    (ok (ft-get-supply bittoken))
+)
