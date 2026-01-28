@@ -131,6 +131,9 @@
         ;; Check owner authorization
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-OWNER-ONLY)
         
+        ;; Validate amount is greater than zero
+        (asserts! (> amount u0) (err u103))
+        
         ;; Mint tokens to recipient
         (try! (ft-mint? bittoken amount recipient))
         
