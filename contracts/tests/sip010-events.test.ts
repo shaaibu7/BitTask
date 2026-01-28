@@ -89,4 +89,21 @@ describe('SIP-010 Token - Event Emission', () => {
     const printEvent = events.find(e => e.event === 'print');
     expect(printEvent).toBeDefined();
   });
+
+  it('should emit URI update event', () => {
+    const newUri = "https://example.com/updated-metadata.json";
+    
+    const { result, events } = simnet.callPublicFn(
+      'sip010-token', 
+      'set-token-uri', 
+      [Cl.some(Cl.stringUtf8(newUri))], 
+      deployer
+    );
+    
+    expect(result).toBeOk(Cl.bool(true));
+    expect(events).toHaveLength(1); // print event
+    
+    const printEvent = events.find(e => e.event === 'print');
+    expect(printEvent).toBeDefined();
+  });
 });
