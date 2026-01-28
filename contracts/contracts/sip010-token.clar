@@ -15,6 +15,8 @@
 (define-constant ERR-NOT-TOKEN-OWNER (err u101))
 (define-constant ERR-INSUFFICIENT-BALANCE (err u1))
 (define-constant ERR-INSUFFICIENT-ALLOWANCE (err u2))
+(define-constant ERR-INVALID-AMOUNT (err u103))
+(define-constant ERR-INVALID-PRINCIPAL (err u104))
 
 ;; Data variables
 (define-data-var contract-owner principal tx-sender)
@@ -132,7 +134,7 @@
         (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-OWNER-ONLY)
         
         ;; Validate amount is greater than zero
-        (asserts! (> amount u0) (err u103))
+        (asserts! (> amount u0) ERR-INVALID-AMOUNT)
         
         ;; Mint tokens to recipient
         (try! (ft-mint? bittoken amount recipient))
@@ -208,4 +210,27 @@
 ;; Get current contract owner
 (define-read-only (get-contract-owner)
     (var-get contract-owner)
+)
+;; Get token URI (SIP-010 optional function)
+(define-public (get-token-uri)
+    (ok (var-get token-uri))
+)
+
+;; Set token URI (owner only)
+(define-public (set-token-uri (new-uri (optional (string-utf8 256))))
+    (begin
+        ;; Check owner authorization
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-OWNER-ONLY)
+        
+        ;; Update token URI
+        (var-set token-uri new-uri)
+        
+        ;; Emit URI update event
+        (print {
+            action: "uri-update",
+            new-uri: new-uri
+        })
+        
+        (ok true)
+    )
 )
