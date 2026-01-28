@@ -39,3 +39,7 @@
 (define-public (get-symbol)
     (ok TOKEN-SYMBOL)
 )
+;; Get token decimals
+(define-public (get-decimals)
+    (ok TOKEN-DECIMALS)
+)
