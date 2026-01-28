@@ -57,6 +57,9 @@
         ;; Verify sender authorization
         (asserts! (is-eq tx-sender sender) ERR-NOT-TOKEN-OWNER)
         
+        ;; Check sufficient balance
+        (asserts! (>= (ft-get-balance bittoken sender) amount) ERR-INSUFFICIENT-BALANCE)
+        
         ;; Execute transfer using fungible token primitives
         (try! (ft-transfer? bittoken amount sender recipient))
         
