@@ -19,3 +19,12 @@
 ;; Data variables
 (define-data-var contract-owner principal tx-sender)
 (define-data-var token-uri (optional (string-utf8 256)) none)
+
+;; Data maps
+(define-map allowances {owner: principal, spender: principal} uint)
+
+;; Define the fungible token
+(define-fungible-token bittoken)
+
+;; Initialize contract with initial supply to owner
+(ft-mint? bittoken INITIAL-SUPPLY tx-sender)
