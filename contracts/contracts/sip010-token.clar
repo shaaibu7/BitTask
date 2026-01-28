@@ -183,3 +183,29 @@
         )
     )
 )
+;; Administrative functions
+
+;; Set new contract owner (current owner only)
+(define-public (set-contract-owner (new-owner principal))
+    (begin
+        ;; Check current owner authorization
+        (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-OWNER-ONLY)
+        
+        ;; Update contract owner
+        (var-set contract-owner new-owner)
+        
+        ;; Emit ownership transfer event
+        (print {
+            action: "ownership-transfer",
+            old-owner: tx-sender,
+            new-owner: new-owner
+        })
+        
+        (ok true)
+    )
+)
+
+;; Get current contract owner
+(define-read-only (get-contract-owner)
+    (var-get contract-owner)
+)
