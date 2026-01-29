@@ -7,7 +7,15 @@
   "scripts": {
     "test": "vitest run",
     "test:report": "vitest run -- --coverage --costs",
-    "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\""
+    "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\"",
+    "test:multi-token": "vitest run multi-token-suite.test.ts",
+    "deploy:multi-token": "ts-node scripts/deploy-multi-token-suite.ts",
+    "deploy:testnet": "STACKS_NETWORK=testnet ts-node scripts/deploy-multi-token-suite.ts",
+    "deploy:mainnet": "STACKS_NETWORK=mainnet ts-node scripts/deploy-multi-token-suite.ts",
+    "utils:demo": "ts-node scripts/multi-token-demo.ts",
+    "check:contracts": "clarinet check",
+    "format:contracts": "clarinet format",
+    "analyze:contracts": "clarinet analyze"
   },
   "author": "",
   "license": "ISC",
