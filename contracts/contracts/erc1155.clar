@@ -67,20 +67,35 @@
     (asserts! (<= size MAX-BATCH-SIZE) ERR-ARRAY-LENGTH-MISMATCH)
 )
 
-;; @desc Get multiple balances efficiently in a single call
+;; @desc Enhanced batch balance query with gas optimization
 ;; @param owners: List of principals to query
 ;; @param token-ids: List of token IDs to query (must match owners length)
 ;; @returns: List of balances corresponding to each owner/token-id pair
-(define-read-only (get-balance-batch (owners (list 100 principal)) (token-ids (list 100 uint)))
+(define-read-only (get-balance-batch-optimized (owners (list 50 principal)) (token-ids (list 50 uint)))
     (let ((owners-length (len owners))
           (token-ids-length (len token-ids)))
         ;; Ensure arrays have same length
         (asserts! (is-eq owners-length token-ids-length) ERR-ARRAY-LENGTH-MISMATCH)
         (try! (validate-batch-size owners-length))
         
-        ;; Map over the pairs and get balances
-        (ok (map get-balance-pair (zip owners token-ids)))
+        ;; Optimized batch processing
+        (ok (map get-balance-optimized (zip-optimized owners token-ids)))
     )
+)
+
+;; Optimized balance lookup
+(define-private (get-balance-optimized (pair {owner: principal, token-id: uint}))
+    (default-to u0 (map-get? token-balances {owner: (get owner pair), token-id: (get token-id pair)}))
+)
+
+;; Optimized zip function
+(define-private (zip-optimized (owners (list 50 principal)) (token-ids (list 50 uint)))
+    (map make-pair-optimized owners token-ids)
+)
+
+;; Optimized pair creation
+(define-private (make-pair-optimized (owner principal) (token-id uint))
+    {owner: owner, token-id: token-id}
 )
 
 ;; Helper function for batch balance queries
