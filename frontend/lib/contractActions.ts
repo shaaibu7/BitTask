@@ -1,11 +1,12 @@
 import { openContractCall } from '@stacks/connect';
 import { UserSession } from '@stacks/auth';
 import { STACKS_MAINNET, STACKS_TESTNET } from '@stacks/network';
-import { uintCV, stringAsciiCV, FungibleConditionCode } from '@stacks/transactions';
+import { uintCV, stringAsciiCV, principalCV, FungibleConditionCode } from '@stacks/transactions';
 import { createSTXPostCondition } from '@stacks/transactions/dist/pc';
 
 const CONTRACT_ADDRESS = 'SP34HE2KF7SPKB8BD5GY39SG7M207FZPRXJS4NMY9';
 const CONTRACT_NAME = 'bittask';
+const REFERRAL_CONTRACT_NAME = 'referral-system';
 
 // Use testnet for development, mainnet for production
 const network = process.env.NEXT_PUBLIC_STACKS_NETWORK === 'mainnet' ? STACKS_MAINNET : STACKS_TESTNET;
@@ -231,6 +232,44 @@ export async function reclaimExpired(
     });
   } catch (error) {
     console.error('Error reclaiming expired task:', error);
+    throw error;
+  }
+}
+
+export async function registerReferrer(
+  userSession: UserSession,
+  referrer: string,
+  options?: ContractCallOptions
+): Promise<void> {
+  try {
+    // Principal CV is not imported, using standard string principal validation via stacks transactions would be better
+    // but we can pass it as a string to principalCV if we had it.
+    // For now, let's assume principalCV is available or we use a workaround.
+    // Wait, I need to check imports.
+    await openContractCall({
+      contractAddress: CONTRACT_ADDRESS,
+      contractName: REFERRAL_CONTRACT_NAME,
+      functionName: 'register-referrer',
+      functionArgs: [
+        principalCV(referrer),
+      ],
+      network,
+      userSession,
+      onFinish: (data) => {
+        console.log('Referrer registered:', data);
+        const txId = data?.txId || data?.txid || data?.response?.txid || data?.stacksTransaction?.txid();
+        if (txId && options?.onTransactionId) {
+          options.onTransactionId(txId);
+        }
+        options?.onFinish?.(data);
+      },
+      onCancel: () => {
+        console.log('Transaction cancelled');
+        options?.onCancel?.();
+      },
+    });
+  } catch (error) {
+    console.error('Error registering referrer:', error);
     throw error;
   }
 }
