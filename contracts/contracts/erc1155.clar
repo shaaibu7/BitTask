@@ -67,20 +67,35 @@
     (asserts! (<= size MAX-BATCH-SIZE) ERR-ARRAY-LENGTH-MISMATCH)
 )
 
-;; @desc Get multiple balances efficiently in a single call
+;; @desc Enhanced batch balance query with gas optimization
 ;; @param owners: List of principals to query
 ;; @param token-ids: List of token IDs to query (must match owners length)
 ;; @returns: List of balances corresponding to each owner/token-id pair
-(define-read-only (get-balance-batch (owners (list 100 principal)) (token-ids (list 100 uint)))
+(define-read-only (get-balance-batch-optimized (owners (list 50 principal)) (token-ids (list 50 uint)))
     (let ((owners-length (len owners))
           (token-ids-length (len token-ids)))
         ;; Ensure arrays have same length
         (asserts! (is-eq owners-length token-ids-length) ERR-ARRAY-LENGTH-MISMATCH)
         (try! (validate-batch-size owners-length))
         
-        ;; Map over the pairs and get balances
-        (ok (map get-balance-pair (zip owners token-ids)))
+        ;; Optimized batch processing
+        (ok (map get-balance-optimized (zip-optimized owners token-ids)))
     )
+)
+
+;; Optimized balance lookup
+(define-private (get-balance-optimized (pair {owner: principal, token-id: uint}))
+    (default-to u0 (map-get? token-balances {owner: (get owner pair), token-id: (get token-id pair)}))
+)
+
+;; Optimized zip function
+(define-private (zip-optimized (owners (list 50 principal)) (token-ids (list 50 uint)))
+    (map make-pair-optimized owners token-ids)
+)
+
+;; Optimized pair creation
+(define-private (make-pair-optimized (owner principal) (token-id uint))
+    {owner: owner, token-id: token-id}
 )
 
 ;; Helper function for batch balance queries
@@ -1683,6 +1698,128 @@
 ;; @param operator: The address that initiated the transfer
 ;; @param from: The sender address (none for minting)
 ;; @param to: The recipient address (none for burning)
+;; @param token-id: The token ID being transferred
+;; @param amount: The amount being transferred
+(define-private (emit-transfer-event (operator principal) (from (optional principal)) (to (optional principal)) (token-id uint) (amount uint))
+    (print {
+        event: "transfer-single",
+        operator: operator,
+        from: from,
+        to: to,
+        token-id: token-id,
+        amount: amount,
+        block-height: stacks-block-height
+    })
+)
+
+;; @desc Emit standardized batch transfer event
+;; @param operator: The address that initiated the transfer
+;; @param from: The sender address
+;; @param to: The recipient address
+;; @param token-ids: List of token IDs being transferred
+;; @param amounts: List of amounts being transferred
+(define-private (emit-batch-transfer-event (operator principal) (from principal) (to principal) (token-ids (list 100 uint)) (amounts (list 100 uint)))
+    (print {
+        event: "transfer-batch",
+        operator: operator,
+        from: from,
+        to: to,
+        token-ids: token-ids,
+        amounts: amounts,
+        block-height: stacks-block-height
+    })
+)
+
+;; @desc Emit approval event
+;; @param owner: The token owner
+;; @param operator: The approved operator
+;; @param approved: Whether approval was granted or revoked
+(define-private (emit-approval-event (owner principal) (operator principal) (approved bool))
+    (print {
+        event: "approval-for-all",
+        owner: owner,
+        operator: operator,
+        approved: approved,
+        block-height: stacks-block-height
+    })
+)
+
+;; Interface Detection (ERC-165 style)
+
+;; @desc Check if contract supports a specific interface
+;; @param interface-id: The interface identifier to check
+;; @returns: True if interface is supported
+(define-read-only (supports-interface (interface-id (buff 4)))
+    (or 
+        ;; ERC-1155 interface ID
+        (is-eq interface-id 0xd9b67a26)
+        ;; ERC-165 interface ID  
+        (is-eq interface-id 0x01ffc9a7)
+        ;; Custom multi-token interface
+        (is-eq interface-id 0x12345678)
+    )
+)
+
+;; Advanced Query Functions
+
+;; @desc Get all balances for a specific owner across multiple token types
+;; @param owner: The owner to query
+;; @param token-ids: List of token IDs to check
+;; @returns: List of balances for each token ID
+(define-read-only (get-balances-for-owner (owner principal) (token-ids (list 100 uint)))
+    (map (lambda (token-id) (get-balance owner token-id)) token-ids)
+)
+
+;; @desc Get all owners who have a balance for a specific token (simplified)
+;; @param token-id: The token ID to query
+;; @returns: Basic existence check (in real implementation would return owner list)
+(define-read-only (get-token-holders-count (token-id uint))
+    ;; Simplified - in real implementation would track holders
+    (if (> (get-total-supply token-id) u0) u1 u0)
+)
+
+;; @desc Check if an address has any tokens of a specific type
+;; @param owner: The address to check
+;; @param token-id: The token ID to check
+;; @returns: True if owner has any balance
+(define-read-only (has-balance (owner principal) (token-id uint))
+    (> (get-balance owner token-id) u0)
+)
+
+;; @desc Get token activity status
+;; @param token-id: The token ID to check
+;; @returns: Tuple with existence and activity status
+(define-read-only (get-token-status (token-id uint))
+    {
+        exists: (token-exists token-id),
+        has-supply: (> (get-total-supply token-id) u0),
+        has-metadata: (> (len (get-token-uri token-id)) u0),
+        creator: (get-token-creator token-id)
+    }
+)
+
+;; Batch Query Optimizations
+
+;; @desc Get comprehensive token data for multiple tokens
+;; @param token-ids: List of token IDs to query
+;; @returns: List of comprehensive token data
+(define-read-only (get-tokens-comprehensive-data (token-ids (list 100 uint)))
+    (map get-comprehensive-token-data token-ids)
+)
+
+;; @desc Get comprehensive data for a single token
+;; @param token-id: The token ID to query
+;; @returns: Comprehensive token data tuple
+(define-private (get-comprehensive-token-data (token-id uint))
+    {
+        token-id: token-id,
+        exists: (token-exists token-id),
+        total-supply: (get-total-supply token-id),
+        uri: (get-token-uri token-id),
+        creator: (get-token-creator token-id),
+        has-metadata: (> (len (get-token-uri token-id)) u0)
+    }
+)ess (none for burning)
 ;; @param token-id: The token ID transferred
 ;; @param amount: The amount transferred
 (define-private (emit-transfer-event (operator principal) (from (optional principal)) (to (optional principal)) (token-id uint) (amount uint))
