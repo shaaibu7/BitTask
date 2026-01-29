@@ -1,0 +1,262 @@
+{
+  "contracts": {
+    "erc1155": {
+      "name": "ERC1155 Multi-Token",
+      "description": "Core multi-token contract with ERC1155 compatibility",
+      "version": "1.2.0",
+      "features": [
+        "multi-token-support",
+        "batch-operations",
+        "operator-approval",
+        "metadata-management",
+        "supply-tracking",
+        "event-emission"
+      ],
+      "gasEstimates": {
+        "mint": 5000,
+        "transfer-single": 3000,
+        "transfer-batch": 8000,
+        "set-approval": 2000,
+        "burn": 3000
+      }
+    },
+    "multi-token-factory": {
+      "name": "Multi-Token Factory",
+      "description": "Factory for deploying multi-token contracts",
+      "version": "1.0.0",
+      "features": [
+        "contract-deployment",
+        "registry-management",
+        "deployer-tracking",
+        "contract-lifecycle"
+      ],
+      "gasEstimates": {
+        "deploy-contract": 15000,
+        "deactivate-contract": 3000
+      }
+    },
+    "token-marketplace": {
+      "name": "Token Marketplace",
+      "description": "Marketplace for trading multi-tokens",
+      "version": "1.0.0",
+      "features": [
+        "listing-creation",
+        "token-purchase",
+        "fee-collection",
+        "listing-management"
+      ],
+      "gasEstimates": {
+        "create-listing": 8000,
+        "purchase-tokens": 10000,
+        "cancel-listing": 3000
+      },
+      "defaultFee": 250,
+      "maxFee": 1000
+    },
+    "multi-token-staking": {
+      "name": "Multi-Token Staking",
+      "description": "Staking system for multi-tokens with rewards",
+      "version": "1.0.0",
+      "features": [
+        "staking-pools",
+        "reward-calculation",
+        "stake-unstake",
+        "reward-claiming"
+      ],
+      "gasEstimates": {
+        "create-pool": 8000,
+        "stake-tokens": 8000,
+        "unstake-tokens": 8000,
+        "claim-rewards": 6000
+      }
+    },
+    "token-bridge": {
+      "name": "Token Bridge",
+      "description": "Cross-chain bridge for multi-tokens",
+      "version": "1.0.0",
+      "features": [
+        "cross-chain-transfers",
+        "supported-chains",
+        "transfer-tracking",
+        "fee-collection"
+      ],
+      "gasEstimates": {
+        "initiate-transfer": 15000,
+        "process-incoming": 12000,
+        "complete-transfer": 8000
+      },
+      "supportedChains": [
+        "ethereum",
+        "polygon",
+        "bsc"
+      ],
+      "defaultBridgeFee": 1000000
+    },
+    "token-governance": {
+      "name": "Token Governance",
+      "description": "DAO governance system for multi-tokens",
+      "version": "1.0.0",
+      "features": [
+        "proposal-creation",
+        "token-voting",
+        "proposal-execution",
+        "governance-settings"
+      ],
+      "gasEstimates": {
+        "create-proposal": 10000,
+        "vote-proposal": 8000,
+        "finalize-proposal": 6000,
+        "execute-proposal": 12000
+      },
+      "defaultSettings": {
+        "minProposalTokens": 1000,
+        "votingDuration": 1440,
+        "quorumThreshold": 10
+      }
+    },
+    "token-auction": {
+      "name": "Token Auction",
+      "description": "Auction system for multi-tokens",
+      "version": "1.0.0",
+      "features": [
+        "auction-creation",
+        "bidding-system",
+        "auction-settlement",
+        "reserve-prices"
+      ],
+      "gasEstimates": {
+        "create-auction": 10000,
+        "place-bid": 12000,
+        "settle-auction": 15000,
+        "cancel-auction": 5000
+      },
+      "defaultFee": 250,
+      "maxFee": 1000
+    }
+  },
+  "deployment": {
+    "order": [
+      "erc1155",
+      "multi-token-factory",
+      "token-marketplace",
+      "multi-token-staking",
+      "token-bridge",
+      "token-governance",
+      "token-auction"
+    ],
+    "dependencies": {
+      "multi-token-factory": ["erc1155"],
+      "token-marketplace": ["erc1155"],
+      "multi-token-staking": ["erc1155"],
+      "token-bridge": ["erc1155"],
+      "token-governance": ["erc1155"],
+      "token-auction": ["erc1155"]
+    },
+    "initialization": {
+      "token-bridge": {
+        "function": "initialize-bridge",
+        "required": true
+      },
+      "token-governance": {
+        "function": "set-governance-token",
+        "required": true,
+        "params": ["erc1155-contract", "token-id"]
+      }
+    }
+  },
+  "testing": {
+    "testSuites": [
+      "multi-token-suite.test.ts"
+    ],
+    "coverage": {
+      "target": 90,
+      "exclude": [
+        "emergency-functions",
+        "owner-only-functions"
+      ]
+    },
+    "scenarios": [
+      "basic-token-operations",
+      "marketplace-trading",
+      "staking-rewards",
+      "governance-voting",
+      "auction-bidding",
+      "cross-chain-bridging",
+      "integration-tests"
+    ]
+  },
+  "security": {
+    "accessControls": [
+      "owner-only-functions",
+      "operator-approvals",
+      "authorization-checks"
+    ],
+    "safetyMechanisms": [
+      "input-validation",
+      "overflow-protection",
+      "reentrancy-guards",
+      "emergency-pause"
+    ],
+    "auditPoints": [
+      "state-consistency",
+      "atomic-operations",
+      "event-logging",
+      "error-handling"
+    ]
+  },
+  "integration": {
+    "frontend": {
+      "sdk": "multi-token-utils.ts",
+      "events": [
+        "transfer-single",
+        "transfer-batch",
+        "approval-for-all",
+        "listing-created",
+        "tokens-purchased",
+        "tokens-staked",
+        "proposal-created",
+        "vote-cast",
+        "auction-created",
+        "bid-placed"
+      ]
+    },
+    "backend": {
+      "indexing": [
+        "transfer-events",
+        "marketplace-events",
+        "staking-events",
+        "governance-events",
+        "auction-events"
+      ],
+      "monitoring": [
+        "contract-health",
+        "transaction-volume",
+        "error-rates",
+        "gas-usage"
+      ]
+    }
+  },
+  "networks": {
+    "testnet": {
+      "name": "Stacks Testnet",
+      "chainId": "testnet",
+      "explorer": "https://explorer.stacks.co/?chain=testnet",
+      "api": "https://stacks-node-api.testnet.stacks.co"
+    },
+    "mainnet": {
+      "name": "Stacks Mainnet",
+      "chainId": "mainnet",
+      "explorer": "https://explorer.stacks.co",
+      "api": "https://stacks-node-api.mainnet.stacks.co"
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "author": "BitTask Team",
+    "license": "MIT",
+    "repository": "https://github.com/bittask/multi-token-contracts",
+    "documentation": "https://docs.bittask.com/multi-token",
+    "created": "2024-01-29",
+    "lastUpdated": "2024-01-29"
+  }
+}
