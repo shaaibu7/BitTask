@@ -16,6 +16,8 @@
 (define-constant ERR-NOT-SUBMITTED (err u110)) ;; Task has not been submitted
 (define-constant ERR-NOT-CREATOR (err u111)) ;; Caller is not the task creator
 (define-constant ERR-ALREADY-COMPLETED (err u112)) ;; Task is already completed
+(define-constant ERR-INVALID-MILESTONE (err u113)) ;; Milestone ID not found or invalid
+(define-constant ERR-MILESTONE-ALREADY-APPROVED (err u114)) ;; Milestone already approved
 
 ;; Data Variables
 (define-data-var task-nonce uint u0) ;; Global counter for task IDs
@@ -34,6 +36,16 @@
         status: (string-ascii 20), ;; "open", "in-progress", "submitted", "completed", "disputed"
         submission: (optional (string-ascii 256)), ;; Proof of work link/hash
         created-at: uint,
+    }
+)
+
+;; Storage for task milestones
+(define-map Milestones
+    { task-id: uint, milestone-id: uint }
+    {
+        description: (string-ascii 128),
+        amount: uint,
+        status: (string-ascii 20), ;; "pending", "approved"
     }
 )
 
@@ -265,6 +277,62 @@
         })
 
         (ok true)
+    )
+)
+
+;; @desc Add a milestone to a task
+;; @param task-id uint - Task ID
+;; @param milestone-id uint - Milestone ID (sequential for task)
+;; @param description (string-ascii 128) - Milestone description
+;; @param amount uint - Micro-STX to be released upon completion
+(define-public (add-milestone
+        (task-id uint)
+        (milestone-id uint)
+        (description (string-ascii 128))
+        (amount uint)
+    )
+    (let ((task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID)))
+        ;; Check if sender is creator
+        (asserts! (is-eq tx-sender (get creator task)) ERR-NOT-CREATOR)
+        ;; Check if task is not completed
+        (asserts! (not (is-eq (get status task) "completed")) ERR-ALREADY-COMPLETED)
+        ;; Check amount is within total task amount (simplified for now)
+        ;; In a full implementation, we'd track remaining balance
+        
+        (map-set Milestones { task-id: task-id, milestone-id: milestone-id }
+            {
+                description: description,
+                amount: amount,
+                status: "pending"
+            }
+        )
+        (ok true)
+    )
+)
+
+;; @desc Approve a milestone and release partial payment
+;; @param task-id uint - Task ID
+;; @param milestone-id uint - Milestone ID
+(define-public (approve-milestone (task-id uint) (milestone-id uint))
+    (let ((task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID))
+          (milestone (unwrap! (map-get? Milestones { task-id: task-id, milestone-id: milestone-id }) ERR-INVALID-MILESTONE)))
+        
+        ;; Check if sender is creator
+        (asserts! (is-eq tx-sender (get creator task)) ERR-NOT-CREATOR)
+        ;; Check if milestone is not already approved
+        (asserts! (is-eq (get status milestone) "pending") ERR-MILESTONE-ALREADY-APPROVED)
+        
+        (let ((worker-principal (unwrap! (get worker task) ERR-NOT-WORKER)))
+            ;; Update milestone status
+            (map-set Milestones { task-id: task-id, milestone-id: milestone-id }
+                (merge milestone { status: "approved" })
+            )
+            
+            ;; Transfer milestone amount to worker
+            (try! (as-contract (stx-transfer? (get amount milestone) tx-sender worker-principal)))
+            
+            (ok true)
+        )
     )
 )
 
