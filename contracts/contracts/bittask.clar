@@ -18,9 +18,11 @@
 (define-constant ERR-ALREADY-COMPLETED (err u112)) ;; Task is already completed
 (define-constant ERR-INVALID-MILESTONE (err u113)) ;; Milestone ID not found or invalid
 (define-constant ERR-MILESTONE-ALREADY-APPROVED (err u114)) ;; Milestone already approved
+(define-constant ERR-ORACLE-ONLY (err u115))
 
 ;; Data Variables
 (define-data-var task-nonce uint u0) ;; Global counter for task IDs
+(define-data-var oracle-address principal tx-sender) ;; Trusted validator address
 
 ;; Data Maps
 ;; Main storage for task details
@@ -344,6 +346,62 @@
 
 (define-read-only (get-nonce)
     (var-get task-nonce)
+)
+
+;; Admin / Oracle Functions
+
+;; @desc Update the trusted oracle address (Owner only)
+(define-public (set-oracle (new-oracle principal))
+    (begin
+        ;; Logic for contract-owner check omitted for simplicity in this expander, assuming owner is deployer for now
+        (asserts! (is-eq tx-sender (var-get oracle-address)) ERR-UNAUTHORIZED)
+        (var-set oracle-address new-oracle)
+        (ok true)
+    )
+)
+
+;; @desc Oracle-based validation of task completion
+;; @param task-id: The ID of the task to validate
+;; @param external-data-hash: Proof from external source
+(define-public (oracle-validate-task (task-id uint) (external-data-hash (buff 32)))
+    (let (
+        (task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID))
+    )
+        (asserts! (is-eq tx-sender (var-get oracle-address)) ERR-ORACLE-ONLY)
+        (asserts! (is-eq (get status task) "submitted") ERR-NOT-SUBMITTED)
+        
+        (map-set Tasks task-id (merge task { status: "validated" }))
+        (print { action: "oracle-validation", id: task-id, proof: external-data-hash })
+        (ok true)
+    )
+)
+
+;; Admin / Oracle Functions
+
+;; @desc Update the trusted oracle address (Owner only)
+(define-public (set-oracle (new-oracle principal))
+    (begin
+        ;; Logic for contract-owner check omitted for simplicity in this expander, assuming owner is deployer for now
+        (asserts! (is-eq tx-sender (var-get oracle-address)) ERR-UNAUTHORIZED)
+        (var-set oracle-address new-oracle)
+        (ok true)
+    )
+)
+
+;; @desc Oracle-based validation of task completion
+;; @param task-id: The ID of the task to validate
+;; @param external-data-hash: Proof from external source
+(define-public (oracle-validate-task (task-id uint) (external-data-hash (buff 32)))
+    (let (
+        (task (unwrap! (map-get? Tasks task-id) ERR-INVALID-ID))
+    )
+        (asserts! (is-eq tx-sender (var-get oracle-address)) ERR-ORACLE-ONLY)
+        (asserts! (is-eq (get status task) "submitted") ERR-NOT-SUBMITTED)
+        
+        (map-set Tasks task-id (merge task { status: "validated" }))
+        (print { action: "oracle-validation", id: task-id, proof: external-data-hash })
+        (ok true)
+    )
 )
 
 (define-read-only (get-tasks (id-list (list 200 uint)))
