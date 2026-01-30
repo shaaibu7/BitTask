@@ -231,3 +231,62 @@
 (define-private (revoke-approval-helper (token-id uint))
   (map-delete token-approvals token-id)
 )
+;; Additional utility functions
+
+;; Get tokens owned by a principal
+(define-read-only (get-tokens-owned (owner principal))
+  (let ((balance (default-to u0 (map-get? owner-balances owner))))
+    (ok (get-tokens-owned-helper owner u1 (var-get last-token-id) (list)))
+  )
+)
+
+(define-private (get-tokens-owned-helper (owner principal) (current-id uint) (max-id uint) (acc (list 1000 uint)))
+  (if (> current-id max-id)
+    acc
+    (let ((token-owner (map-get? token-owners current-id)))
+      (if (is-eq (some owner) token-owner)
+        (get-tokens-owned-helper owner (+ current-id u1) max-id (unwrap-panic (as-max-len? (append acc current-id) u1000)))
+        (get-tokens-owned-helper owner (+ current-id u1) max-id acc)
+      )
+    )
+  )
+)
+
+;; Check if token ID is valid (exists)
+(define-read-only (is-valid-token-id (token-id uint))
+  (and (> token-id u0) (<= token-id (var-get last-token-id)))
+)
+
+;; Get contract owner
+(define-read-only (get-contract-owner)
+  (ok (var-get contract-owner))
+)
+
+;; Transfer contract ownership (only current owner)
+(define-public (transfer-ownership (new-owner principal))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (var-set contract-owner new-owner)
+    
+    (print {
+      type: "ownership_transfer_event",
+      old-owner: tx-sender,
+      new-owner: new-owner
+    })
+    
+    (ok true)
+  )
+)
+
+;; Batch mint function for efficiency
+(define-public (batch-mint (recipients (list 100 principal)) (uris (list 100 (string-ascii 256))))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (asserts! (is-eq (len recipients) (len uris)) ERR-INVALID-RECIPIENT)
+    (ok (map batch-mint-helper recipients uris))
+  )
+)
+
+(define-private (batch-mint-helper (recipient principal) (uri (string-ascii 256)))
+  (mint recipient uri)
+)
