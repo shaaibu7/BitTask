@@ -32,7 +32,6 @@
 (define-constant ERR-ALREADY-COMPLETED (err u112)) ;; Task is already completed
 (define-constant ERR-INVALID-MILESTONE (err u113)) ;; Milestone ID not found or invalid
 (define-constant ERR-MILESTONE-ALREADY-APPROVED (err u114)) ;; Milestone already approved
-(define-constant ERR-ORACLE-ONLY (err u115))
 
 ;; Enhanced validation error constants
 (define-constant ERR-TITLE-TOO-SHORT (err u113)) ;; Title must be at least 5 characters
