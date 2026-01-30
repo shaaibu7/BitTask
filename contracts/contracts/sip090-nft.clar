@@ -290,3 +290,73 @@
 (define-private (batch-mint-helper (recipient principal) (uri (string-ascii 256)))
   (mint recipient uri)
 )
+;; Enhanced error handling and validation
+
+;; Additional error constants
+(define-constant ERR-INVALID-TOKEN-ID (err u405))
+(define-constant ERR-SELF-TRANSFER (err u406))
+(define-constant ERR-INVALID-URI (err u407))
+(define-constant ERR-BATCH-SIZE-MISMATCH (err u408))
+
+;; Input validation functions
+(define-private (validate-token-id (token-id uint))
+  (asserts! (> token-id u0) ERR-INVALID-TOKEN-ID)
+  (asserts! (<= token-id (var-get last-token-id)) ERR-NOT-FOUND)
+  (ok true)
+)
+
+(define-private (validate-principal (principal-to-check principal))
+  (asserts! (not (is-eq principal-to-check 'SP000000000000000000002Q6VF78)) ERR-INVALID-RECIPIENT)
+  (ok true)
+)
+
+(define-private (validate-uri (uri (string-ascii 256)))
+  (asserts! (> (len uri) u0) ERR-INVALID-URI)
+  (ok true)
+)
+
+;; Enhanced transfer with full validation
+(define-public (safe-transfer (token-id uint) (sender principal) (recipient principal))
+  (begin
+    ;; Comprehensive validation
+    (try! (validate-token-id token-id))
+    (try! (validate-principal recipient))
+    (asserts! (not (is-eq sender recipient)) ERR-SELF-TRANSFER)
+    
+    ;; Execute transfer
+    (transfer token-id sender recipient)
+  )
+)
+
+;; Enhanced mint with validation
+(define-public (safe-mint (recipient principal) (token-uri (string-ascii 256)))
+  (begin
+    ;; Validate inputs
+    (try! (validate-principal recipient))
+    (try! (validate-uri token-uri))
+    
+    ;; Execute mint
+    (mint recipient token-uri)
+  )
+)
+
+;; Error reporting function
+(define-read-only (get-error-message (error-code uint))
+  (if (is-eq error-code u401)
+    (some "Not authorized")
+    (if (is-eq error-code u404)
+      (some "Not found")
+      (if (is-eq error-code u409)
+        (some "Already exists")
+        (if (is-eq error-code u400)
+          (some "Invalid recipient")
+          (if (is-eq error-code u405)
+            (some "Invalid token ID")
+            (if (is-eq error-code u406)
+              (some "Self transfer not allowed")
+              (if (is-eq error-code u407)
+                (some "Invalid URI")
+                (if (is-eq error-code u408)
+                  (some "Batch size mismatch")
+                  none)))))))))
+)
