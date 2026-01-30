@@ -360,3 +360,67 @@
                   (some "Batch size mismatch")
                   none)))))))))
 )
+;; Additional utility functions for enhanced functionality
+
+;; Burn token function (removes token from circulation)
+(define-public (burn (token-id uint))
+  (let ((owner (unwrap! (map-get? token-owners token-id) ERR-NOT-FOUND)))
+    (asserts! (or (is-eq tx-sender owner) (is-eq tx-sender (var-get contract-owner))) ERR-NOT-AUTHORIZED)
+    
+    ;; Remove token from maps
+    (map-delete token-owners token-id)
+    (map-delete token-uris token-id)
+    (map-delete token-approvals token-id)
+    
+    ;; Update balance
+    (map-set owner-balances owner 
+      (- (default-to u0 (map-get? owner-balances owner)) u1))
+    
+    ;; Emit burn event
+    (print {
+      type: "nft_burn_event",
+      token-id: token-id,
+      owner: owner
+    })
+    
+    (ok true)
+  )
+)
+
+;; Set contract metadata (owner only)
+(define-public (set-contract-metadata (name (string-ascii 32)) (symbol (string-ascii 10)))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (var-set token-name name)
+    (var-set token-symbol symbol)
+    (ok true)
+  )
+)
+
+;; Emergency pause functionality
+(define-data-var contract-paused bool false)
+
+(define-public (pause-contract)
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (var-set contract-paused true)
+    (ok true)
+  )
+)
+
+(define-public (unpause-contract)
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (var-set contract-paused false)
+    (ok true)
+  )
+)
+
+(define-read-only (is-paused)
+  (var-get contract-paused)
+)
+
+;; Modifier to check if contract is not paused
+(define-private (assert-not-paused)
+  (asserts! (not (var-get contract-paused)) (err u410)) ;; ERR-CONTRACT-PAUSED
+)
