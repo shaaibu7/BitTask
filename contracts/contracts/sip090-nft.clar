@@ -34,3 +34,30 @@
 (define-read-only (get-total-supply)
   (ok (var-get last-token-id))
 )
+
+;; SIP-090 required functions
+
+;; Get the last token ID
+(define-read-only (get-last-token-id)
+  (ok (var-get last-token-id))
+)
+
+;; Get token URI
+(define-read-only (get-token-uri (token-id uint))
+  (ok (map-get? token-uris token-id))
+)
+
+;; Get token owner
+(define-read-only (get-owner (token-id uint))
+  (ok (map-get? token-owners token-id))
+)
+
+;; Helper function to check if token exists
+(define-read-only (token-exists (token-id uint))
+  (is-some (map-get? token-owners token-id))
+)
+
+;; Get balance of owner
+(define-read-only (get-balance (owner principal))
+  (ok (default-to u0 (map-get? owner-balances owner)))
+)
