@@ -61,3 +61,43 @@
 (define-read-only (get-balance (owner principal))
   (ok (default-to u0 (map-get? owner-balances owner)))
 )
+;; Minting functionality
+
+;; Mint a new token
+(define-public (mint (recipient principal) (token-uri (string-ascii 256)))
+  (let ((token-id (+ (var-get last-token-id) u1)))
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (asserts! (is-none (map-get? token-owners token-id)) ERR-ALREADY-EXISTS)
+    
+    ;; Update token storage
+    (map-set token-owners token-id recipient)
+    (map-set token-uris token-id token-uri)
+    
+    ;; Update balances
+    (map-set owner-balances recipient 
+      (+ (default-to u0 (map-get? owner-balances recipient)) u1))
+    
+    ;; Update last token ID
+    (var-set last-token-id token-id)
+    
+    ;; Emit transfer event (from none to recipient)
+    (print {
+      type: "nft_mint_event",
+      token-id: token-id,
+      sender: none,
+      recipient: recipient
+    })
+    
+    (ok token-id)
+  )
+)
+
+;; Set token URI (only contract owner)
+(define-public (set-token-uri (token-id uint) (uri (string-ascii 256)))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) ERR-NOT-AUTHORIZED)
+    (asserts! (token-exists token-id) ERR-NOT-FOUND)
+    (map-set token-uris token-id uri)
+    (ok true)
+  )
+)
