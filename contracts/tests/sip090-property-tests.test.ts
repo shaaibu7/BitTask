@@ -619,3 +619,49 @@ Clarinet.test({
         }
     },
 });
+// **Feature: sip090-token, Property 14: Token existence accuracy**
+// **Validates: Requirements 5.1**
+Clarinet.test({
+    name: "Property 14: Token existence accuracy - existence checks should reflect minting status",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        
+        // Property: For any token ID, existence check should accurately reflect minting status
+        
+        // Initially, no tokens should exist
+        for (let tokenId = 1; tokenId <= 5; tokenId++) {
+            let existsBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'token-exists', [types.uint(tokenId)], deployer.address)
+            ]);
+            assertEquals(existsBlock.receipts[0].result, types.bool(false));
+        }
+        
+        // Mint some tokens
+        const tokensToMint = 3;
+        for (let i = 1; i <= tokensToMint; i++) {
+            let mintBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'mint', [
+                    types.principal(wallet1.address),
+                    types.ascii(`https://example.com/token/${i}`)
+                ], deployer.address)
+            ]);
+        }
+        
+        // Now check existence - minted tokens should exist, unminted should not
+        for (let tokenId = 1; tokenId <= 10; tokenId++) {
+            let existsBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'token-exists', [types.uint(tokenId)], deployer.address)
+            ]);
+            
+            const shouldExist = tokenId <= tokensToMint;
+            assertEquals(existsBlock.receipts[0].result, types.bool(shouldExist));
+            
+            // Also test is-valid-token-id function
+            let validBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'is-valid-token-id', [types.uint(tokenId)], deployer.address)
+            ]);
+            assertEquals(validBlock.receipts[0].result, types.bool(shouldExist));
+        }
+    },
+});
