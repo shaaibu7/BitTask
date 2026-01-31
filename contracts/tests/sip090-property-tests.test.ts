@@ -37,3 +37,46 @@ Clarinet.test({
         }
     },
 });
+
+// **Feature: sip090-token, Property 2: Token query consistency**
+// **Validates: Requirements 1.3, 1.4, 5.2**
+Clarinet.test({
+    name: "Property 2: Token query consistency - get-owner and get-token-uri should return correct data",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        
+        // Generate random test data
+        const testTokens = [
+            { recipient: wallet1.address, uri: "https://example.com/token/1" },
+            { recipient: wallet1.address, uri: "https://example.com/token/2" },
+            { recipient: wallet1.address, uri: "https://example.com/token/3" }
+        ];
+        
+        // Mint tokens with known data
+        let mintBlock = chain.mineBlock(
+            testTokens.map((token, index) => 
+                Tx.contractCall('sip090-nft', 'mint', [
+                    types.principal(token.recipient),
+                    types.ascii(token.uri)
+                ], deployer.address)
+            )
+        );
+        
+        // Property: For any valid token ID, queries should return consistent data
+        for (let tokenId = 1; tokenId <= testTokens.length; tokenId++) {
+            let queryBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'get-owner', [types.uint(tokenId)], deployer.address),
+                Tx.contractCall('sip090-nft', 'get-token-uri', [types.uint(tokenId)], deployer.address)
+            ]);
+            
+            // Owner should match what we minted
+            const owner = queryBlock.receipts[0].result.expectOk().expectSome();
+            assertEquals(owner, testTokens[tokenId - 1].recipient);
+            
+            // URI should match what we set
+            const uri = queryBlock.receipts[1].result.expectOk().expectSome();
+            assertEquals(uri, types.ascii(testTokens[tokenId - 1].uri));
+        }
+    },
+});
