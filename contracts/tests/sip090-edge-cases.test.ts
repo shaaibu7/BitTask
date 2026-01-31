@@ -41,3 +41,27 @@ Clarinet.test({
         assertEquals(ownerBlock.receipts[0].result.expectOk().expectSome(), wallet1.address);
     },
 });
+Clarinet.test({
+    name: "Edge Case: Empty URI validation",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        
+        // Attempt to mint with empty URI using safe-mint
+        let emptyUriBlock = chain.mineBlock([
+            Tx.contractCall('sip090-nft', 'safe-mint', [
+                types.principal(wallet1.address),
+                types.ascii("") // Empty URI
+            ], deployer.address)
+        ]);
+        
+        // Should fail with ERR-INVALID-URI (407)
+        emptyUriBlock.receipts[0].result.expectErr(types.uint(407));
+        
+        // Verify no token was created
+        let totalSupplyBlock = chain.mineBlock([
+            Tx.contractCall('sip090-nft', 'get-total-supply', [], deployer.address)
+        ]);
+        assertEquals(totalSupplyBlock.receipts[0].result.expectOk(), types.uint(0));
+    },
+});
