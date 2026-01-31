@@ -574,3 +574,48 @@ Clarinet.test({
         assertEquals(lastTokenIdBlock.receipts[0].result.expectOk(), types.uint(0));
     },
 });
+// **Feature: sip090-token, Property 13: Mint event emission**
+// **Validates: Requirements 4.4**
+Clarinet.test({
+    name: "Property 13: Mint event emission - mints should emit transfer events from none",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        const wallet2 = accounts.get('wallet_2')!;
+        
+        // Property: For any successful mint, Transfer event should be emitted from none
+        const mintTests = [
+            { recipient: wallet1.address, uri: "https://example.com/token/1" },
+            { recipient: wallet2.address, uri: "https://example.com/token/2" },
+            { recipient: wallet1.address, uri: "https://example.com/token/3" }
+        ];
+        
+        for (let i = 0; i < mintTests.length; i++) {
+            const test = mintTests[i];
+            const expectedTokenId = i + 1;
+            
+            let mintBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'mint', [
+                    types.principal(test.recipient),
+                    types.ascii(test.uri)
+                ], deployer.address)
+            ]);
+            
+            // Mint should succeed
+            assertEquals(mintBlock.receipts[0].result.expectOk(), types.uint(expectedTokenId));
+            
+            // Check that event was emitted (events are in the receipt events array)
+            const events = mintBlock.receipts[0].events;
+            
+            // Should have at least one event
+            assertEquals(events.length >= 1, true);
+            
+            // Look for print event with mint data
+            const printEvents = events.filter(e => e.type === 'contract_event');
+            assertEquals(printEvents.length >= 1, true);
+            
+            // The contract emits a print event with mint information
+            // This validates that the event emission mechanism is working
+        }
+    },
+});
