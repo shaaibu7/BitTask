@@ -166,3 +166,53 @@ Clarinet.test({
         }
     },
 });
+// **Feature: sip090-token, Property 5: Unauthorized transfer rejection**
+// **Validates: Requirements 2.2**
+Clarinet.test({
+    name: "Property 5: Unauthorized transfer rejection - non-owners should not be able to transfer",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const deployer = accounts.get('deployer')!;
+        const wallet1 = accounts.get('wallet_1')!;
+        const wallet2 = accounts.get('wallet_2')!;
+        const wallet3 = accounts.get('wallet_3')!;
+        
+        // Mint tokens to different owners
+        let mintBlock = chain.mineBlock([
+            Tx.contractCall('sip090-nft', 'mint', [
+                types.principal(wallet1.address),
+                types.ascii("https://example.com/token/1")
+            ], deployer.address),
+            Tx.contractCall('sip090-nft', 'mint', [
+                types.principal(wallet2.address),
+                types.ascii("https://example.com/token/2")
+            ], deployer.address)
+        ]);
+        
+        // Property: For any transfer attempt by non-owner, transaction should be rejected
+        const unauthorizedAttempts = [
+            { tokenId: 1, owner: wallet1.address, unauthorized: wallet2.address, target: wallet3.address },
+            { tokenId: 1, owner: wallet1.address, unauthorized: wallet3.address, target: wallet2.address },
+            { tokenId: 2, owner: wallet2.address, unauthorized: wallet1.address, target: wallet3.address },
+            { tokenId: 2, owner: wallet2.address, unauthorized: wallet3.address, target: wallet1.address }
+        ];
+        
+        for (const attempt of unauthorizedAttempts) {
+            let transferBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'transfer', [
+                    types.uint(attempt.tokenId),
+                    types.principal(attempt.owner),
+                    types.principal(attempt.target)
+                ], attempt.unauthorized) // Unauthorized caller
+            ]);
+            
+            // Should fail with ERR-NOT-AUTHORIZED (401)
+            transferBlock.receipts[0].result.expectErr(types.uint(401));
+            
+            // Verify ownership unchanged
+            let ownerBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'get-owner', [types.uint(attempt.tokenId)], deployer.address)
+            ]);
+            assertEquals(ownerBlock.receipts[0].result.expectOk().expectSome(), attempt.owner);
+        }
+    },
+});
