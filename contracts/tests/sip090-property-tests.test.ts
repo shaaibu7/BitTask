@@ -534,3 +534,43 @@ Clarinet.test({
         }
     },
 });
+// **Feature: sip090-token, Property 12: Unauthorized mint rejection**
+// **Validates: Requirements 4.2**
+Clarinet.test({
+    name: "Property 12: Unauthorized mint rejection - non-owners should not be able to mint",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const wallet1 = accounts.get('wallet_1')!;
+        const wallet2 = accounts.get('wallet_2')!;
+        const wallet3 = accounts.get('wallet_3')!;
+        
+        const unauthorizedCallers = [wallet1.address, wallet2.address, wallet3.address];
+        
+        // Property: For any mint attempt by non-owner, transaction should be rejected
+        for (let i = 0; i < unauthorizedCallers.length; i++) {
+            const caller = unauthorizedCallers[i];
+            const recipient = unauthorizedCallers[(i + 1) % unauthorizedCallers.length];
+            
+            let mintBlock = chain.mineBlock([
+                Tx.contractCall('sip090-nft', 'mint', [
+                    types.principal(recipient),
+                    types.ascii(`https://example.com/unauthorized/${i}`)
+                ], caller) // Non-owner trying to mint
+            ]);
+            
+            // Should fail with ERR-NOT-AUTHORIZED (401)
+            mintBlock.receipts[0].result.expectErr(types.uint(401));
+        }
+        
+        // Verify no tokens were minted
+        let totalSupplyBlock = chain.mineBlock([
+            Tx.contractCall('sip090-nft', 'get-total-supply', [], wallet1.address)
+        ]);
+        assertEquals(totalSupplyBlock.receipts[0].result.expectOk(), types.uint(0));
+        
+        // Verify last token ID is still 0
+        let lastTokenIdBlock = chain.mineBlock([
+            Tx.contractCall('sip090-nft', 'get-last-token-id', [], wallet1.address)
+        ]);
+        assertEquals(lastTokenIdBlock.receipts[0].result.expectOk(), types.uint(0));
+    },
+});
